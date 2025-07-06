@@ -1,0 +1,20 @@
+---
+
+volumes:
+  falkordb_data:
+
+services:
+  falkordb:
+    container_name: falkordb
+    image: falkordb/falkordb:latest
+    volumes:
+      - ./falkordb_data:/var/lib/falkordb/data
+    ports:
+      - 3000:3000
+      - 6379:6379
+    restart: always
+    networks:
+      data-lake-network:
+
+networks:
+  data-lake-network: 

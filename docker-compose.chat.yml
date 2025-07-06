@@ -1,0 +1,23 @@
+---
+
+volumes:
+  psql-data:
+
+services:
+  fastapi:
+    env_file:
+      - .env
+    container_name: fastapi
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    volumes:
+      - ./:/code
+    ports:
+      - 8080:8080
+    restart: always
+    networks:
+      data-lake-network:
+
+networks:
+  data-lake-network: 

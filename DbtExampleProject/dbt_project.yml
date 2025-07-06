@@ -1,0 +1,76 @@
+
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'DbtExampleProject'
+version: '1.0.0'
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'DbtExampleProject'
+
+# These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+on-run-start: |-
+  {% set creation_query_str %}
+    -- Creating source tables and populating them in PostgreSQL
+    CREATE SCHEMA IF NOT EXISTS raw;
+
+    -- 1. Customers source
+    CREATE TABLE if not exists raw.customers (
+        customer_id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    Truncate table raw.customers;
+
+    INSERT INTO raw.customers (name, email) VALUES
+        ('Alice Johnson', 'alice@example.com'),
+        ('Bob Smith', 'bob@example.com'),
+        ('Charlie Brown', 'charlie@example.com');
+
+    -- 2. Orders source
+    CREATE TABLE if not exists raw.orders (
+        order_id SERIAL PRIMARY KEY,
+        customer_id INT REFERENCES raw.customers(customer_id),
+        order_total DECIMAL(10,2),
+        order_date TIMESTAMP DEFAULT now()
+    );
+
+    Truncate table raw.orders;
+
+    INSERT INTO raw.orders (customer_id, order_total) VALUES
+        (1, 250.75),
+        (2, 100.00),
+        (3, 320.50),
+        (1, 75.25);
+
+  {% endset %}
+  {{ creation_query_str }}
+
+
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
+# In this example config, we tell dbt to build all models in the example/
+# directory as views. These settings can be overridden in the individual model
+# files using the `{{ config(...) }}` macro.
+models:
+  DbtExampleProject:
+    # Config indicated by + and applies to all files under models/example/
+    example:
+      +materialized: view

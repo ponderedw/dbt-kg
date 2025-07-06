@@ -1,0 +1,20 @@
+---
+
+services:
+  neo4j:
+    container_name: neo4j
+    image: neo4j
+    environment:
+      NEO4J_PLUGINS: "[\"apoc\"]"
+      NEO4J_AUTH: neo4j/Testtest123
+    volumes:
+      - ./neo4j_data:/data
+    ports:
+      - 7474:7474
+      - 7687:7687
+    restart: always
+    networks:
+      data-lake-network:
+
+networks:
+  data-lake-network: 

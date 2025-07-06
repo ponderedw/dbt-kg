@@ -1,0 +1,21 @@
+DbtExampleProject:
+  outputs:
+    dev:
+      dbname: postgres
+      host: localhost
+      pass: postgres
+      port: 5432
+      schema: dbt
+      threads: 6
+      type: postgres
+      user: postgres
+    container:
+      dbname: postgres
+      host: postgres
+      pass: postgres
+      port: 5432
+      schema: dbt
+      threads: 6
+      type: postgres
+      user: postgres
+  target: dev

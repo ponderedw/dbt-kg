@@ -1,0 +1,41 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: "Raw data from transactional sources."
+    tables:
+      - name: customers
+        description: "Customer information."
+        columns:
+          - name: customer_id
+            description: "Primary key of customers."
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Full name of the customer."
+          - name: email
+            description: "Email address of the customer."
+          - name: created_at
+            description: "Timestamp of customer creation."
+      
+      - name: orders
+        description: "Orders placed by customers."
+        columns:
+          - name: order_id
+            description: "Primary key of orders."
+            tests:
+              - unique
+              - not_null
+          - name: customer_id
+            description: "Foreign key linking to customers."
+            tests:
+              - not_null
+              - relationships:
+                  to: ref('customers')
+                  field: customer_id
+          - name: order_total
+            description: "Total amount of the order."
+          - name: order_date
+            description: "Timestamp when the order was placed."

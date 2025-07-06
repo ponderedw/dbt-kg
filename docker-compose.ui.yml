@@ -1,0 +1,21 @@
+---
+
+version: "3.5"
+
+services:
+  chat_ui:
+    container_name: chat_ui
+    env_file:
+      - .env
+    ports:
+      - "8501:8501"
+    build:
+      context: .
+      dockerfile: streamlit/.Dockerfile
+    volumes:
+      - ./streamlit:/app/streamlit
+    networks:
+      data-lake-network:
+
+networks:
+  data-lake-network: 
