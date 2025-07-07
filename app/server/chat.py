@@ -67,16 +67,16 @@ async def chat(
     retriever_tool = None
     if os.environ.get('GRAPH_DB') == 'falkordb':
         graph = FalkorDBGraph(host='falkordb', port=6379, database="dbt_graph",
-                              username=os.environ.get('GRAPH_USER_FALKORDB'),
-                              password=os.environ.get('GRAPH_PASSWORD_FALKORDB'
+                              username=os.environ.get('GRAPH_USER'),
+                              password=os.environ.get('GRAPH_PASSWORD'
                                                       ),)
         chain = FalkorDBQAChain.from_llm(ChatModel(), graph=graph, verbose=True, allow_dangerous_requests=True)
         retriever_tool = chain.as_tool(name="Falkor_Knowledge_Graph_Retriever",
                                             description="Query and retrieve data from your Falkor graph database using Cypher syntax")
     elif os.environ.get('GRAPH_DB') == 'neo4j':
         graph = Neo4jGraph(url="bolt://neo4j:7687",
-                           username=os.environ.get('GRAPH_USER_NEO4J'),
-                           password=os.environ.get('GRAPH_PASSWORD_NEO4J'),
+                           username=os.environ.get('GRAPH_USER'),
+                           password=os.environ.get('GRAPH_PASSWORD'),
                            enhanced_schema=True)
         chain = GraphCypherQAChain.from_llm(
             ChatModel(),

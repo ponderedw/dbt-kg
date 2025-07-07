@@ -18,11 +18,15 @@ async def upload_dbt_metadata(catalog_file: Annotated[UploadFile, File()],
                               manifest_file: Annotated[UploadFile, File()]):
     manifest_str = await manifest_file.read()
     catalog_str = await catalog_file.read()
-    loader = DBTFalkorDBLoader(username=os.environ.get('GRAPH_USER_FALKORDB'),
-                               password=os.environ.get('GRAPH_PASSWORD_FALKORDB'))
-    loader.load_dbt_to_falkordb_from_strings(manifest_str, catalog_str)
-    loader = DBTNeo4jLoader('neo4j://neo4j:7687',
-                            os.environ.get('GRAPH_USER_NEO4J'),
-                            os.environ.get('GRAPH_PASSWORD_NEO4J'))
-    loader.load_dbt_to_neo4j_from_strings(manifest_str, catalog_str)
+    if os.environ.get('GRAPH_DB') == 'falkordb':
+        loader = DBTFalkorDBLoader(username=os.environ.get('GRAPH_USER'),
+                                   password=os.environ.get('GRAPH_PASSWORD'))
+        loader.load_dbt_to_falkordb_from_strings(manifest_str, catalog_str)
+    elif os.environ.get('GRAPH_DB') == 'neo4j':
+        loader = DBTNeo4jLoader('neo4j://neo4j:7687',
+                                os.environ.get('GRAPH_USER'),
+                                os.environ.get('GRAPH_PASSWORD'))
+        loader.load_dbt_to_neo4j_from_strings(manifest_str, catalog_str)
+    else:
+        raise Exception('GRAPH_DB value is incorrect')
     return {'results': 'ok'}

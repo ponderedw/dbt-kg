@@ -16,6 +16,7 @@ if submitted:
                 files={'catalog_file': catalog_file,
                        'manifest_file': manifest_file}
                 )
-        st.write(response.status_code)
+        if response.status_code == 200:
+            st.write('The metadata has been successfully uploaded.')
     else:
         st.warning("Please upload files before submitting and add node id.")

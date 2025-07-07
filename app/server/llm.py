@@ -122,7 +122,6 @@ class ChatMessage:
         if not isinstance(content, str):
             content_type = content[0]['type']
             content = content[0].get('text')
-        print('Imhereeee')
         print(f'_handle_on_chat_model_stream: {content_type} {content}')
         # If the message is a tool call, just print a debug message.
         if content_type in ('tool_use', 'tool_call'):
