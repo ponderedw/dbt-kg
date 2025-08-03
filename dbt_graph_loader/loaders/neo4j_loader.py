@@ -94,12 +94,6 @@ class DBTNeo4jLoader:
                     'language': model_data.get('language', 'sql'),
                 }
                 
-                # Add raw and compiled code
-                if 'raw_code' in model_data:
-                    properties['raw_code'] = model_data['raw_code']
-                if 'compiled_code' in model_data:
-                    properties['compiled_code'] = model_data['compiled_code']
-                
                 # Add config details
                 config = model_data.get('config', {})
                 properties.update({
@@ -108,12 +102,6 @@ class DBTNeo4jLoader:
                     'meta': json.dumps(config.get('meta', {})),
                     'access': config.get('access', ''),
                 })
-                
-                # Add version and constraints info
-                if 'version' in model_data and model_data['version']:
-                    properties['version'] = model_data['version']
-                if 'constraints' in model_data:
-                    properties['constraints'] = json.dumps(model_data['constraints'])
                 
                 # Add catalog information if available
                 if catalog_nodes and model_id in catalog_nodes:
@@ -143,7 +131,7 @@ class DBTNeo4jLoader:
                 
                 properties = {
                     'unique_id': source_id,
-                    'name': full_name,  # Changed to use full name
+                    'name': full_name,
                     'identifier': identifier,
                     'resource_type': source_data.get('resource_type', ''),
                     'package_name': source_data.get('package_name', ''),
@@ -152,30 +140,19 @@ class DBTNeo4jLoader:
                     'schema': source_data.get('schema', ''),
                     'description': source_data.get('description', ''),
                     'loader': source_data.get('loader', ''),
-                    'source_description': source_data.get('source_description', ''),
                     'relation_name': source_data.get('relation_name', ''),
                 }
                 
-                # Add freshness configuration
+                # Add freshness and columns info
                 freshness = source_data.get('freshness', {})
                 if freshness:
                     properties['freshness_warn_after'] = json.dumps(freshness.get('warn_after', {}))
                     properties['freshness_error_after'] = json.dumps(freshness.get('error_after', {}))
-                    properties['freshness_filter'] = freshness.get('filter', '')
                 
-                # Add columns information
                 columns = source_data.get('columns', {})
                 if columns:
                     properties['column_count'] = len(columns)
                     properties['columns'] = json.dumps(columns)
-                
-                # Add quoting and external info
-                quoting = source_data.get('quoting', {})
-                if quoting:
-                    properties['quoting'] = json.dumps(quoting)
-                
-                if 'external' in source_data and source_data['external']:
-                    properties['external'] = json.dumps(source_data['external'])
                 
                 session.run("""
                     MERGE (s:Source {unique_id: $unique_id})
@@ -194,13 +171,10 @@ class DBTNeo4jLoader:
                     'resource_type': seed_data.get('resource_type', ''),
                     'package_name': seed_data.get('package_name', ''),
                     'path': seed_data.get('path', ''),
-                    'original_file_path': seed_data.get('original_file_path', ''),
                     'database': seed_data.get('database', ''),
                     'schema': seed_data.get('schema', ''),
                     'alias': seed_data.get('alias', ''),
-                    'checksum': seed_data.get('checksum', {}).get('checksum', ''),
                     'relation_name': seed_data.get('relation_name', ''),
-                    'root_path': seed_data.get('root_path', ''),
                 }
                 
                 # Add config details
@@ -208,16 +182,9 @@ class DBTNeo4jLoader:
                 properties.update({
                     'enabled': config.get('enabled', True),
                     'tags': config.get('tags', []),
-                    'meta': json.dumps(config.get('meta', {})),
                     'materialized': config.get('materialized', 'seed'),
                     'delimiter': config.get('delimiter', ','),
-                    'quote_columns': config.get('quote_columns'),
                 })
-                
-                # Add column types if available
-                column_types = config.get('column_types', {})
-                if column_types:
-                    properties['column_types'] = json.dumps(column_types)
                 
                 session.run("""
                     MERGE (seed:Seed {unique_id: $unique_id})
@@ -236,43 +203,22 @@ class DBTNeo4jLoader:
                     'resource_type': snapshot_data.get('resource_type', ''),
                     'package_name': snapshot_data.get('package_name', ''),
                     'path': snapshot_data.get('path', ''),
-                    'original_file_path': snapshot_data.get('original_file_path', ''),
                     'database': snapshot_data.get('database', ''),
                     'schema': snapshot_data.get('schema', ''),
                     'alias': snapshot_data.get('alias', ''),
-                    'checksum': snapshot_data.get('checksum', {}).get('checksum', ''),
                     'relation_name': snapshot_data.get('relation_name', ''),
                 }
-                
-                # Add raw and compiled code
-                if 'raw_code' in snapshot_data:
-                    properties['raw_code'] = snapshot_data['raw_code']
-                if 'compiled_code' in snapshot_data:
-                    properties['compiled_code'] = snapshot_data['compiled_code']
                 
                 # Add snapshot-specific config
                 config = snapshot_data.get('config', {})
                 properties.update({
                     'enabled': config.get('enabled', True),
                     'tags': config.get('tags', []),
-                    'meta': json.dumps(config.get('meta', {})),
                     'materialized': config.get('materialized', 'snapshot'),
                     'strategy': config.get('strategy', ''),
                     'unique_key': config.get('unique_key', ''),
                     'updated_at': config.get('updated_at', ''),
-                    'target_schema': config.get('target_schema', ''),
-                    'target_database': config.get('target_database', ''),
                 })
-                
-                # Add check_cols for check strategy
-                check_cols = config.get('check_cols', [])
-                if check_cols:
-                    properties['check_cols'] = json.dumps(check_cols)
-                
-                # Add snapshot meta column names if available
-                snapshot_meta_column_names = config.get('snapshot_meta_column_names', {})
-                if snapshot_meta_column_names:
-                    properties['snapshot_meta_column_names'] = json.dumps(snapshot_meta_column_names)
                 
                 session.run("""
                     MERGE (snap:Snapshot {unique_id: $unique_id})
@@ -291,42 +237,23 @@ class DBTNeo4jLoader:
                     'resource_type': test_data.get('resource_type', ''),
                     'package_name': test_data.get('package_name', ''),
                     'path': test_data.get('path', ''),
-                    'original_file_path': test_data.get('original_file_path', ''),
-                    'test_metadata': json.dumps(test_data.get('test_metadata', {})),
                     'column_name': test_data.get('column_name', ''),
-                    'file_key_name': test_data.get('file_key_name', ''),
                     'language': test_data.get('language', 'sql'),
                 }
                 
-                # Add compiled code if available
-                if 'compiled_code' in test_data:
-                    properties['compiled_code'] = test_data['compiled_code']
-                if 'raw_code' in test_data:
-                    properties['raw_code'] = test_data['raw_code']
-                
-                # Add config details
+                # Add config and test metadata
                 config = test_data.get('config', {})
                 properties.update({
                     'enabled': config.get('enabled', True),
                     'tags': config.get('tags', []),
-                    'meta': json.dumps(config.get('meta', {})),
                     'severity': config.get('severity', 'ERROR'),
-                    'store_failures': config.get('store_failures'),
-                    'store_failures_as': config.get('store_failures_as'),
-                    'where_clause': config.get('where'),
-                    'limit_clause': config.get('limit'),
-                    'fail_calc': config.get('fail_calc', 'count(*)'),
-                    'warn_if': config.get('warn_if', '!= 0'),
-                    'error_if': config.get('error_if', '!= 0'),
                 })
                 
-                # Add test metadata details
                 test_metadata = test_data.get('test_metadata', {})
                 if test_metadata:
                     properties.update({
                         'test_name': test_metadata.get('name', ''),
                         'test_kwargs': json.dumps(test_metadata.get('kwargs', {})),
-                        'test_namespace': test_metadata.get('namespace', ''),
                     })
                 
                 session.run("""
@@ -346,24 +273,9 @@ class DBTNeo4jLoader:
                     'resource_type': macro_data.get('resource_type', ''),
                     'package_name': macro_data.get('package_name', ''),
                     'path': macro_data.get('path', ''),
-                    'original_file_path': macro_data.get('original_file_path', ''),
-                    'macro_sql': macro_data.get('macro_sql', ''),
                     'description': macro_data.get('description', ''),
                     'arguments': json.dumps(macro_data.get('arguments', [])),
-                    'supported_languages': json.dumps(macro_data.get('supported_languages', [])),
                 }
-                
-                # Add created_at timestamp if available
-                if 'created_at' in macro_data:
-                    properties['created_at'] = macro_data['created_at']
-                
-                # Add docs information
-                docs = macro_data.get('docs', {})
-                if docs:
-                    properties.update({
-                        'docs_show': docs.get('show', True),
-                        'docs_node_color': docs.get('node_color', ''),
-                    })
                 
                 session.run("""
                     MERGE (mac:Macro {unique_id: $unique_id})
@@ -382,26 +294,10 @@ class DBTNeo4jLoader:
                     'resource_type': op_data.get('resource_type', ''),
                     'package_name': op_data.get('package_name', ''),
                     'path': op_data.get('path', ''),
-                    'original_file_path': op_data.get('original_file_path', ''),
                     'database': op_data.get('database', ''),
                     'schema': op_data.get('schema', ''),
-                    'raw_code': op_data.get('raw_code', ''),
-                    'compiled_code': op_data.get('compiled_code', ''),
-                    'index': op_data.get('index', 0),
                     'language': op_data.get('language', 'sql'),
                 }
-                
-                # Add config details
-                config = op_data.get('config', {})
-                properties.update({
-                    'enabled': config.get('enabled', True),
-                    'tags': config.get('tags', []),
-                    'meta': json.dumps(config.get('meta', {})),
-                })
-                
-                # Add created_at timestamp if available
-                if 'created_at' in op_data:
-                    properties['created_at'] = op_data['created_at']
                 
                 session.run("""
                     MERGE (o:Operation {unique_id: $unique_id})
@@ -411,9 +307,9 @@ class DBTNeo4jLoader:
         logger.info(f"Created {len(operations)} operation nodes")
     
     def create_dependencies(self, parent_map: Dict[str, List[str]], child_map: Dict[str, List[str]]):
-        """Create dependency relationships using DEPENDS_ON for all types"""
+        """Create dependency relationships"""
         with self.driver.session() as session:
-            # Create DEPENDS_ON relationships from parent_map
+            dependency_count = 0
             for child, parents in parent_map.items():
                 for parent in parents:
                     session.run("""
@@ -421,69 +317,51 @@ class DBTNeo4jLoader:
                         MATCH (child) WHERE child.unique_id = $child_id
                         MERGE (child)-[:DEPENDS_ON]->(parent)
                     """, parent_id=parent, child_id=child)
+                    dependency_count += 1
             
-            logger.info(f"Created dependency relationships from parent_map")
+            logger.info(f"Created {dependency_count} dependency relationships")
     
     def create_ref_relationships(self, nodes: Dict[str, Any]):
         """Create REFERENCES relationships between models"""
         with self.driver.session() as session:
+            ref_count = 0
             for node_id, node_data in nodes.items():
                 refs = node_data.get('refs', [])
                 for ref in refs:
-                    if isinstance(ref, dict):
-                        ref_name = ref.get('name')
-                        ref_package = ref.get('package')
-                        ref_version = ref.get('version')
-                    else:
-                        ref_name = ref
-                        ref_package = None
-                        ref_version = None
-                    
+                    ref_name = ref.get('name') if isinstance(ref, dict) else ref
                     if ref_name:
-                        # Find the referenced model
-                        query = """
+                        session.run("""
                             MATCH (referencing) WHERE referencing.unique_id = $referencing_id
                             MATCH (referenced:Model) WHERE referenced.name = $ref_name
-                        """
-                        params = {'referencing_id': node_id, 'ref_name': ref_name}
-                        
-                        # Add package filter if specified
-                        if ref_package:
-                            query += " AND referenced.package_name = $ref_package"
-                            params['ref_package'] = ref_package
-                        
-                        # Add version filter if specified
-                        if ref_version:
-                            query += " AND referenced.version = $ref_version"
-                            params['ref_version'] = ref_version
-                        
-                        query += " MERGE (referencing)-[:REFERENCES]->(referenced)"
-                        
-                        session.run(query, params)
-        
-        logger.info("Created REFERENCES relationships")
+                            MERGE (referencing)-[:REFERENCES]->(referenced)
+                        """, referencing_id=node_id, ref_name=ref_name)
+                        ref_count += 1
+            
+            logger.info(f"Created {ref_count} REFERENCES relationships")
     
     def create_source_relationships(self, nodes: Dict[str, Any]):
         """Create DEPENDS_ON relationships to sources"""
         with self.driver.session() as session:
+            source_dep_count = 0
             for node_id, node_data in nodes.items():
                 sources = node_data.get('sources', [])
                 for source in sources:
                     if len(source) >= 2:
                         source_name, table_name = source[0], source[1]
-                        # Use the new full name format: source_name.identifier
                         full_source_name = f"{source_name}.{table_name}"
                         session.run("""
                             MATCH (node) WHERE node.unique_id = $node_id
                             MATCH (source:Source) WHERE source.name = $full_source_name
                             MERGE (node)-[:DEPENDS_ON]->(source)
                         """, node_id=node_id, full_source_name=full_source_name)
-        
-        logger.info("Created DEPENDS_ON relationships to sources")
+                        source_dep_count += 1
+            
+            logger.info(f"Created {source_dep_count} source dependency relationships")
     
     def create_macro_relationships(self, nodes: Dict[str, Any]):
         """Create USES_MACRO relationships"""
         with self.driver.session() as session:
+            macro_count = 0
             for node_id, node_data in nodes.items():
                 depends_on = node_data.get('depends_on', {})
                 macros = depends_on.get('macros', [])
@@ -493,14 +371,15 @@ class DBTNeo4jLoader:
                         MATCH (macro:Macro) WHERE macro.unique_id = $macro_id
                         MERGE (node)-[:USES_MACRO]->(macro)
                     """, node_id=node_id, macro_id=macro)
-        
-        logger.info("Created USES_MACRO relationships")
+                    macro_count += 1
+            
+            logger.info(f"Created {macro_count} USES_MACRO relationships")
     
     def create_test_relationships(self, tests: Dict[str, Any]):
         """Create TESTS relationships"""
         with self.driver.session() as session:
+            test_count = 0
             for test_id, test_data in tests.items():
-                # Link tests to the nodes they test via attached_node
                 attached_node = test_data.get('attached_node')
                 if attached_node:
                     session.run("""
@@ -508,11 +387,9 @@ class DBTNeo4jLoader:
                         MATCH (node) WHERE node.unique_id = $attached_node
                         MERGE (test)-[:TESTS]->(node)
                     """, test_id=test_id, attached_node=attached_node)
-                
-                # Also create DEPENDS_ON relationships based on refs and sources
-                # These are already handled by create_dependencies, but we can add specific test logic here if needed
-        
-        logger.info("Created TESTS relationships")
+                    test_count += 1
+            
+            logger.info(f"Created {test_count} TESTS relationships")
     
     def load_dbt_to_neo4j_from_strings(self, manifest_str: str, catalog_str: Optional[str] = None):
         """Main method to load DBT data into Neo4j from JSON strings"""
@@ -558,7 +435,7 @@ class DBTNeo4jLoader:
         logger.info("DBT to Neo4j load process completed successfully")
     
     def load_dbt_to_neo4j_from_files(self, manifest_path: str, catalog_path: Optional[str] = None):
-        """Main method to load DBT data into Neo4j from files (kept for backward compatibility)"""
+        """Main method to load DBT data into Neo4j from files"""
         logger.info("Starting DBT to Neo4j load process from files")
         
         # Load data from files
@@ -625,72 +502,3 @@ class DBTNeo4jLoader:
             print("\nRelationship counts:")
             for record in rel_counts:
                 print(f"  {record['relationship_type']}: {record['count']}")
-
-async def load_from_uploaded_files(loader: DBTNeo4jLoader, manifest_file, catalog_file=None):
-    """Async function to load DBT data from uploaded file objects"""
-    try:
-        # Read file contents as strings
-        manifest_str = await manifest_file.read()
-        
-        catalog_str = None
-        if catalog_file:
-            catalog_str = await catalog_file.read()
-        
-        # Load into Neo4j using the string method
-        loader.load_dbt_to_neo4j_from_strings(manifest_str, catalog_str)
-        
-        # Print statistics
-        loader.get_graph_stats()
-        
-        print("\n=== Load completed successfully! ===")
-        
-    except Exception as e:
-        logger.error(f"Error during async file loading: {e}")
-        raise
-
-def main():
-    """Main execution function (kept for backward compatibility)"""
-    # Configuration
-    NEO4J_URI = "neo4j://neo4j:7687"
-    NEO4J_USERNAME = "neo4j"
-    NEO4J_PASSWORD = "Testtest123"
-    
-    # File paths - update these to match your file locations
-    MANIFEST_PATH = "manifest.json"
-    CATALOG_PATH = "catalog.json"  # Optional
-    
-    # Initialize loader
-    loader = DBTNeo4jLoader(NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
-    
-    try:
-        # Load data into Neo4j using the file method
-        loader.load_dbt_to_neo4j_from_files(MANIFEST_PATH, CATALOG_PATH)
-        
-        # Print statistics
-        loader.get_graph_stats()
-        
-        print("\n=== Sample Queries ===")
-        print("1. Find all models and their dependencies:")
-        print("   MATCH (m:Model)-[:DEPENDS_ON]->(dep) RETURN m.name, dep.name, labels(dep)")
-        print("\n2. Find models that depend on a specific source:")
-        print("   MATCH (m:Model)-[:DEPENDS_ON]->(s:Source) WHERE s.name = 'raw.customers' RETURN m.name")
-        print("\n3. Find all tests for a model:")
-        print("   MATCH (t:Test)-[:TESTS]->(m:Model) WHERE m.name = 'stg_customers' RETURN t.name")
-        print("\n4. Find the dependency chain for a model:")
-        print("   MATCH path = (m:Model {name: 'customer_ltv'})-[:DEPENDS_ON*]->(dep) RETURN path")
-        print("\n5. Find all seeds and what depends on them:")
-        print("   MATCH (seed:Seed)<-[:DEPENDS_ON]-(dependent) RETURN seed.name, dependent.name, labels(dependent)")
-        print("\n6. Find all snapshots and their dependencies:")
-        print("   MATCH (snap:Snapshot)-[:DEPENDS_ON]->(dep) RETURN snap.name, dep.name, labels(dep)")
-        print("\n7. Find models that use macros:")
-        print("   MATCH (m:Model)-[:USES_MACRO]->(mac:Macro) RETURN m.name, mac.name")
-        
-    except Exception as e:
-        logger.error(f"Error during execution: {e}")
-        raise
-    finally:
-        loader.close()
-
-
-if __name__ == "__main__":
-    main()

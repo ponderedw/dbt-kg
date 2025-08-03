@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, File, UploadFile
 from typing import Annotated
-from app.server.load_falkor import DBTFalkorDBLoader
-from app.server.load_neo4j import DBTNeo4jLoader
+from dbt_graph_loader.loaders.falkordb_loader import DBTFalkorDBLoader
+from dbt_graph_loader.loaders.neo4j_loader import DBTNeo4jLoader
 import os
 
 embeddings_router = APIRouter()

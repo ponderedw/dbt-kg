@@ -3,23 +3,43 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install poetry
+
+# Configure Poetry: Don't create virtual env (we're in Docker)
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
 
 ENV HOME=/root
 
 WORKDIR /code
 
+# Copy requirements first for better caching
 COPY ./requirements-dev.txt /code/requirements-dev.txt
 
-# DEV/PROD: If you don't need the dev dependencies, change to `requirements-server.txt`
+# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade -r /code/requirements-dev.txt
 
+# Copy package files for Poetry build
+COPY ./pyproject.toml /tmp/dbt-graph-loader/
+COPY ./README.md /tmp/dbt-graph-loader/
+COPY ./dbt_graph_loader/ /tmp/dbt-graph-loader/dbt_graph_loader/
+
+# Build and install the package using Poetry
+WORKDIR /tmp/dbt-graph-loader
+RUN poetry config virtualenvs.create false \
+    && poetry install --only=main \
+    && rm -rf /tmp/dbt-graph-loader /tmp/poetry_cache
+
+# Copy your FastAPI app
+WORKDIR /code
 COPY ./app/ /code/app
 
 ENV PYTHONPATH "${PYTHONPATH}:/code:/code/app"
 
 # DEVELOPMENT
 CMD ["fastapi", "dev", "app/server/main.py", "--port", "8080", "--host", "0.0.0.0"]
-
-# If running behind a proxy like Nginx or Traefik add --proxy-headers
-# CMD ["fastapi", "run", "app/main.py", "--port", "80", "--proxy-headers"]

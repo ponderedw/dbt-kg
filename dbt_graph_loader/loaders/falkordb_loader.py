@@ -65,7 +65,7 @@ class DBTFalkorDBLoader:
         return manifest_data, catalog_data
     
     def load_manifest_data(self, manifest_path: str, catalog_path: str = None):
-        """Load manifest and optional catalog data from file paths (legacy method)"""
+        """Load manifest and optional catalog data from file paths"""
         # Load manifest
         with open(manifest_path, 'r') as f:
             manifest_data = json.load(f)
@@ -144,12 +144,6 @@ class DBTFalkorDBLoader:
                 'access': self._escape_string(config.get('access', '')),
             })
             
-            # Add version and constraints info
-            if 'version' in model_data and model_data['version']:
-                properties['version'] = self._escape_string(str(model_data['version']))
-            if 'constraints' in model_data:
-                properties['constraints'] = json.dumps(model_data['constraints'])
-            
             # Add catalog information if available
             if catalog_nodes and model_id in catalog_nodes:
                 catalog_info = catalog_nodes[model_id]
@@ -195,18 +189,15 @@ class DBTFalkorDBLoader:
                 'schema': self._escape_string(source_data.get('schema', '')),
                 'description': self._escape_string(source_data.get('description', '')),
                 'loader': self._escape_string(source_data.get('loader', '')),
-                'source_description': self._escape_string(source_data.get('source_description', '')),
                 'relation_name': self._escape_string(source_data.get('relation_name', '')),
             }
             
-            # Add freshness configuration
+            # Add freshness and columns info
             freshness = source_data.get('freshness', {})
             if freshness:
                 properties['freshness_warn_after'] = json.dumps(freshness.get('warn_after', {}))
                 properties['freshness_error_after'] = json.dumps(freshness.get('error_after', {}))
-                properties['freshness_filter'] = self._escape_string(freshness.get('filter', ''))
             
-            # Add columns information
             columns = source_data.get('columns', {})
             if columns:
                 properties['column_count'] = len(columns)
@@ -238,13 +229,10 @@ class DBTFalkorDBLoader:
                 'resource_type': self._escape_string(seed_data.get('resource_type', '')),
                 'package_name': self._escape_string(seed_data.get('package_name', '')),
                 'path': self._escape_string(seed_data.get('path', '')),
-                'original_file_path': self._escape_string(seed_data.get('original_file_path', '')),
                 'database': self._escape_string(seed_data.get('database', '')),
                 'schema': self._escape_string(seed_data.get('schema', '')),
                 'alias': self._escape_string(seed_data.get('alias', '')),
-                'checksum': self._escape_string(seed_data.get('checksum', {}).get('checksum', '')),
                 'relation_name': self._escape_string(seed_data.get('relation_name', '')),
-                'root_path': self._escape_string(seed_data.get('root_path', '')),
             }
             
             # Add config details
@@ -252,16 +240,9 @@ class DBTFalkorDBLoader:
             properties.update({
                 'enabled': config.get('enabled', True),
                 'tags': str(config.get('tags', [])),
-                'meta': json.dumps(config.get('meta', {})),
                 'materialized': self._escape_string(config.get('materialized', 'seed')),
                 'delimiter': self._escape_string(config.get('delimiter', ',')),
-                'quote_columns': config.get('quote_columns', False),
             })
-            
-            # Add column types if available
-            column_types = config.get('column_types', {})
-            if column_types:
-                properties['column_types'] = json.dumps(column_types)
             
             # Build the query
             prop_strings = []
@@ -289,11 +270,9 @@ class DBTFalkorDBLoader:
                 'resource_type': self._escape_string(snapshot_data.get('resource_type', '')),
                 'package_name': self._escape_string(snapshot_data.get('package_name', '')),
                 'path': self._escape_string(snapshot_data.get('path', '')),
-                'original_file_path': self._escape_string(snapshot_data.get('original_file_path', '')),
                 'database': self._escape_string(snapshot_data.get('database', '')),
                 'schema': self._escape_string(snapshot_data.get('schema', '')),
                 'alias': self._escape_string(snapshot_data.get('alias', '')),
-                'checksum': self._escape_string(snapshot_data.get('checksum', {}).get('checksum', '')),
                 'relation_name': self._escape_string(snapshot_data.get('relation_name', '')),
             }
             
@@ -302,19 +281,11 @@ class DBTFalkorDBLoader:
             properties.update({
                 'enabled': config.get('enabled', True),
                 'tags': str(config.get('tags', [])),
-                'meta': json.dumps(config.get('meta', {})),
                 'materialized': self._escape_string(config.get('materialized', 'snapshot')),
                 'strategy': self._escape_string(config.get('strategy', '')),
                 'unique_key': self._escape_string(config.get('unique_key', '')),
                 'updated_at': self._escape_string(config.get('updated_at', '')),
-                'target_schema': self._escape_string(config.get('target_schema', '')),
-                'target_database': self._escape_string(config.get('target_database', '')),
             })
-            
-            # Add check_cols for check strategy
-            check_cols = config.get('check_cols', [])
-            if check_cols:
-                properties['check_cols'] = json.dumps(check_cols)
             
             # Build the query
             prop_strings = []
@@ -342,36 +313,23 @@ class DBTFalkorDBLoader:
                 'resource_type': self._escape_string(test_data.get('resource_type', '')),
                 'package_name': self._escape_string(test_data.get('package_name', '')),
                 'path': self._escape_string(test_data.get('path', '')),
-                'original_file_path': self._escape_string(test_data.get('original_file_path', '')),
-                'test_metadata': json.dumps(test_data.get('test_metadata', {})),
                 'column_name': self._escape_string(test_data.get('column_name', '')),
-                'file_key_name': self._escape_string(test_data.get('file_key_name', '')),
                 'language': self._escape_string(test_data.get('language', 'sql')),
             }
             
-            # Add config details
+            # Add config and test metadata
             config = test_data.get('config', {})
             properties.update({
                 'enabled': config.get('enabled', True),
                 'tags': str(config.get('tags', [])),
-                'meta': json.dumps(config.get('meta', {})),
                 'severity': self._escape_string(config.get('severity', 'ERROR')),
-                'store_failures': config.get('store_failures', False),
-                'store_failures_as': self._escape_string(config.get('store_failures_as', '')),
-                'where_clause': self._escape_string(config.get('where', '')),
-                'limit_clause': str(config.get('limit', '')),
-                'fail_calc': self._escape_string(config.get('fail_calc', 'count(*)')),
-                'warn_if': self._escape_string(config.get('warn_if', '!= 0')),
-                'error_if': self._escape_string(config.get('error_if', '!= 0')),
             })
             
-            # Add test metadata details
             test_metadata = test_data.get('test_metadata', {})
             if test_metadata:
                 properties.update({
                     'test_name': self._escape_string(test_metadata.get('name', '')),
                     'test_kwargs': json.dumps(test_metadata.get('kwargs', {})),
-                    'test_namespace': self._escape_string(test_metadata.get('namespace', '')),
                 })
             
             # Build the query
@@ -400,23 +358,9 @@ class DBTFalkorDBLoader:
                 'resource_type': self._escape_string(macro_data.get('resource_type', '')),
                 'package_name': self._escape_string(macro_data.get('package_name', '')),
                 'path': self._escape_string(macro_data.get('path', '')),
-                'original_file_path': self._escape_string(macro_data.get('original_file_path', '')),
                 'description': self._escape_string(macro_data.get('description', '')),
                 'arguments': json.dumps(macro_data.get('arguments', [])),
-                'supported_languages': json.dumps(macro_data.get('supported_languages', [])),
             }
-            
-            # Add created_at timestamp if available
-            if 'created_at' in macro_data:
-                properties['created_at'] = self._escape_string(str(macro_data['created_at']))
-            
-            # Add docs information
-            docs = macro_data.get('docs', {})
-            if docs:
-                properties.update({
-                    'docs_show': docs.get('show', True),
-                    'docs_node_color': self._escape_string(docs.get('node_color', '')),
-                })
             
             # Build the query
             prop_strings = []
@@ -444,24 +388,10 @@ class DBTFalkorDBLoader:
                 'resource_type': self._escape_string(op_data.get('resource_type', '')),
                 'package_name': self._escape_string(op_data.get('package_name', '')),
                 'path': self._escape_string(op_data.get('path', '')),
-                'original_file_path': self._escape_string(op_data.get('original_file_path', '')),
                 'database': self._escape_string(op_data.get('database', '')),
                 'schema': self._escape_string(op_data.get('schema', '')),
-                'index': op_data.get('index', 0),
                 'language': self._escape_string(op_data.get('language', 'sql')),
             }
-            
-            # Add config details
-            config = op_data.get('config', {})
-            properties.update({
-                'enabled': config.get('enabled', True),
-                'tags': str(config.get('tags', [])),
-                'meta': json.dumps(config.get('meta', {})),
-            })
-            
-            # Add created_at timestamp if available
-            if 'created_at' in op_data:
-                properties['created_at'] = self._escape_string(str(op_data['created_at']))
             
             # Build the query
             prop_strings = []
@@ -504,32 +434,13 @@ class DBTFalkorDBLoader:
         for node_id, node_data in nodes.items():
             refs = node_data.get('refs', [])
             for ref in refs:
-                if isinstance(ref, dict):
-                    ref_name = ref.get('name')
-                    ref_package = ref.get('package')
-                    ref_version = ref.get('version')
-                else:
-                    ref_name = ref
-                    ref_package = None
-                    ref_version = None
-                
+                ref_name = ref.get('name') if isinstance(ref, dict) else ref
                 if ref_name:
-                    # Build the query with filters
                     query = f"""
                         MATCH (referencing) WHERE referencing.unique_id = '{self._escape_string(node_id)}'
                         MATCH (referenced:Model) WHERE referenced.name = '{self._escape_string(ref_name)}'
+                        CREATE (referencing)-[:REFERENCES]->(referenced)
                     """
-                    
-                    # Add package filter if specified
-                    if ref_package:
-                        query += f" AND referenced.package_name = '{self._escape_string(ref_package)}'"
-                    
-                    # Add version filter if specified
-                    if ref_version:
-                        query += f" AND referenced.version = '{self._escape_string(str(ref_version))}'"
-                    
-                    query += " CREATE (referencing)-[:REFERENCES]->(referenced)"
-                    
                     try:
                         self.graph.query(query)
                         ref_count += 1
@@ -546,7 +457,6 @@ class DBTFalkorDBLoader:
             for source in sources:
                 if len(source) >= 2:
                     source_name, table_name = source[0], source[1]
-                    # Use the new full name format: source_name.identifier
                     full_source_name = f"{source_name}.{table_name}"
                     query = f"""
                         MATCH (node) WHERE node.unique_id = '{self._escape_string(node_id)}'
@@ -645,7 +555,7 @@ class DBTFalkorDBLoader:
         logger.info("DBT to FalkorDB load process completed successfully")
     
     def load_dbt_to_falkordb(self, manifest_path: str, catalog_path: str = None):
-        """Main method to load DBT data into FalkorDB from file paths (legacy method)"""
+        """Main method to load DBT data into FalkorDB from file paths"""
         logger.info("Starting DBT to FalkorDB load process")
         
         # Load data
@@ -715,103 +625,3 @@ class DBTFalkorDBLoader:
                 
         except Exception as e:
             logger.error(f"Error getting graph statistics: {e}")
-
-
-async def load_from_files(manifest_file, catalog_file=None):
-    """
-    Async function to load DBT data from file objects into FalkorDB
-    
-    Args:
-        manifest_file: File object containing manifest.json content
-        catalog_file: Optional file object containing catalog.json content
-    """
-    # Configuration
-    FALKORDB_HOST = "falkordb"
-    FALKORDB_PORT = 6379
-    GRAPH_NAME = "dbt_graph"
-    
-    # Read file contents
-    manifest_str = await manifest_file.read()
-    catalog_str = None
-    if catalog_file:
-        catalog_str = await catalog_file.read()
-    
-    # Initialize loader
-    loader = DBTFalkorDBLoader(FALKORDB_HOST, FALKORDB_PORT, GRAPH_NAME)
-    
-    try:
-        # Load data into FalkorDB from strings
-        loader.load_dbt_to_falkordb_from_strings(manifest_str, catalog_str)
-        
-        # Print statistics
-        loader.get_graph_stats()
-        
-        print("\n=== Sample Queries ===")
-        print("1. Find all models and their dependencies:")
-        print("   MATCH (m:Model)-[:DEPENDS_ON]->(dep) RETURN m.name, dep.name, labels(dep)")
-        print("\n2. Find models that depend on a specific source:")
-        print("   MATCH (m:Model)-[:DEPENDS_ON]->(s:Source) WHERE s.name = 'raw.customers' RETURN m.name")
-        print("\n3. Find all tests for a model:")
-        print("   MATCH (t:Test)-[:TESTS]->(m:Model) WHERE m.name = 'stg_customers' RETURN t.name")
-        print("\n4. Find the dependency chain for a model:")
-        print("   MATCH path = (m:Model {name: 'customer_ltv'})-[:DEPENDS_ON*]->(dep) RETURN path")
-        print("\n5. Find all seeds and what depends on them:")
-        print("   MATCH (seed:Seed)<-[:DEPENDS_ON]-(dependent) RETURN seed.name, dependent.name, labels(dependent)")
-        print("\n6. Find all snapshots and their dependencies:")
-        print("   MATCH (snap:Snapshot)-[:DEPENDS_ON]->(dep) RETURN snap.name, dep.name, labels(dep)")
-        print("\n7. Find models that use macros:")
-        print("   MATCH (m:Model)-[:USES_MACRO]->(mac:Macro) RETURN m.name, mac.name")
-        
-    except Exception as e:
-        logger.error(f"Error during execution: {e}")
-        raise
-    finally:
-        loader.close()
-
-
-def main():
-    """Main execution function for backward compatibility"""
-    # Configuration
-    FALKORDB_HOST = "falkordb"
-    FALKORDB_PORT = 6379
-    GRAPH_NAME = "dbt_graph"
-    
-    # File paths - update these to match your file locations
-    MANIFEST_PATH = "manifest.json"
-    CATALOG_PATH = "catalog.json"  # Optional
-    
-    # Initialize loader
-    loader = DBTFalkorDBLoader(FALKORDB_HOST, FALKORDB_PORT, GRAPH_NAME)
-    
-    try:
-        # Load data into FalkorDB
-        loader.load_dbt_to_falkordb(MANIFEST_PATH, CATALOG_PATH)
-        
-        # Print statistics
-        loader.get_graph_stats()
-        
-        print("\n=== Sample Queries ===")
-        print("1. Find all models and their dependencies:")
-        print("   MATCH (m:Model)-[:DEPENDS_ON]->(dep) RETURN m.name, dep.name, labels(dep)")
-        print("\n2. Find models that depend on a specific source:")
-        print("   MATCH (m:Model)-[:DEPENDS_ON]->(s:Source) WHERE s.name = 'raw.customers' RETURN m.name")
-        print("\n3. Find all tests for a model:")
-        print("   MATCH (t:Test)-[:TESTS]->(m:Model) WHERE m.name = 'stg_customers' RETURN t.name")
-        print("\n4. Find the dependency chain for a model:")
-        print("   MATCH path = (m:Model {name: 'customer_ltv'})-[:DEPENDS_ON*]->(dep) RETURN path")
-        print("\n5. Find all seeds and what depends on them:")
-        print("   MATCH (seed:Seed)<-[:DEPENDS_ON]-(dependent) RETURN seed.name, dependent.name, labels(dependent)")
-        print("\n6. Find all snapshots and their dependencies:")
-        print("   MATCH (snap:Snapshot)-[:DEPENDS_ON]->(dep) RETURN snap.name, dep.name, labels(dep)")
-        print("\n7. Find models that use macros:")
-        print("   MATCH (m:Model)-[:USES_MACRO]->(mac:Macro) RETURN m.name, mac.name")
-        
-    except Exception as e:
-        logger.error(f"Error during execution: {e}")
-        raise
-    finally:
-        loader.close()
-
-
-if __name__ == "__main__":
-    main()
