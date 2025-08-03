@@ -10,9 +10,7 @@ readme = "dbt_graph_loader/README.md"
 license = "MIT"
 authors = ["Hipposys"]
 keywords = ["dbt", "graph", "neo4j", "falkordb", "metadata", "lineage"]
-homepage = "https://github.com/yourusername/dbt-graph-loader"
-repository = "https://github.com/yourusername/dbt-graph-loader"
-documentation = "https://github.com/yourusername/dbt-graph-loader"
+repository = "https://github.com/hipposys-ltd/dbt-kg"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
