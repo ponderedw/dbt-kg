@@ -20,3 +20,4 @@ falkordb = ">=1.0.0"
 
 [tool.poetry.scripts]
 dbt-graph-loader = "dbt_graph_loader.cli:main"
+
