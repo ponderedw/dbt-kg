@@ -25,7 +25,7 @@ dbt-kg bridges the gap between complex dbt project structures and intuitive quer
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/hipposys-ltd/dbt-kg.git
+   git clone https://github.com/ponderedw/dbt-kg.git
    cd dbt-kg
    ```
 

@@ -35,7 +35,7 @@ def get_chat_response(prompt):
     yield "\n (%d minutes and %d seconds)" % (rd.minutes, rd.seconds)
 
 
-st.title("Hipposys Chat")
+st.title("Ponder Chat")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "ai", "content": "Hello 👋"}]

@@ -4,13 +4,13 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "dbt-graph-loader"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Load DBT metadata into graph databases (Neo4j and FalkorDB)"
 readme = "dbt_graph_loader/README.md"
 license = "MIT"
-authors = ["Hipposys"]
+authors = ["Ponder"]
 keywords = ["dbt", "graph", "neo4j", "falkordb", "metadata", "lineage"]
-repository = "https://github.com/hipposys-ltd/dbt-kg"
+repository = "https://github.com/ponderedw/dbt-kg"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"

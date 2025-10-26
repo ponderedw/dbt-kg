@@ -30,7 +30,7 @@ pip install dbt-graph-loader
 ### Development Installation
 ```bash
 # Clone the repository
-git clone https://github.com/hipposys-ltd/dbt-graph-loader.git
+git clone https://github.com/ponderedw/dbt-graph-loader.git
 cd dbt-graph-loader
 
 # Install with Poetry
@@ -348,7 +348,7 @@ async def upload_dbt_metadata(
 
 ```bash
 # Clone repository
-git clone https://github.com/hipposys-ltd/dbt-graph-loader.git
+git clone https://github.com/ponderedw/dbt-graph-loader.git
 
 # Install dependencies
 poetry install
