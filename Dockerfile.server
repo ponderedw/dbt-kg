@@ -21,7 +21,10 @@ WORKDIR /code
 # Copy requirements first for better caching
 COPY ./requirements-dev.txt /code/requirements-dev.txt
 
-# Install Python dependencies
+# Upgrade pip first to latest version
+RUN pip install --upgrade pip
+
+# Install Python dependencies with pinned versions
 RUN pip install --no-cache-dir --upgrade -r /code/requirements-dev.txt
 
 # Copy package files for Poetry build

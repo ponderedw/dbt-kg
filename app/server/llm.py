@@ -20,6 +20,16 @@ The database schema includes:
 - Model attributes: materialized, resource_type, alias, schema
 - Relationships: DEPENDS_ON, REFERENCES, TESTS, USES_MACRO
 
+For example, to find all the fownstreams of stg_students model, use:
+MATCH (start:Model {{name: 'stg_students'}})<-[:DEPENDS_ON]-(downstream:Model)
+RETURN downstream.name AS model_name, downstream.materialized AS materialization_type
+ORDER BY model_name
+
+Upstreams:
+MATCH (start:Model {{name: 'stg_students'}})-[:DEPENDS_ON]->(upstream:Model)
+RETURN upstream.name AS model_name, upstream.materialized AS materialization_type
+ORDER BY model_name
+
 Use the {graphdb_name} retriever to answer questions about model lineage, dependencies, testing coverage, and data flow in our dbt project."""
 
 

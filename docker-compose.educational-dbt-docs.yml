@@ -1,0 +1,23 @@
+---
+
+version: "3.5"
+
+services:
+  educational-dbt-docs:
+    container_name: educational-dbt-docs
+    ports:
+      - "8502:80"
+    build:
+      context: ./DbtEducationalDataProject
+      dockerfile: Dockerfile
+    volumes:
+      - ./DbtEducationalDataProject:/usr/app/dbt
+    depends_on:
+      - postgres
+    networks:
+      - data-lake-network
+    environment:
+      - DBT_PROFILES_DIR=/usr/app/dbt
+
+networks:
+  data-lake-network:

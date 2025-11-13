@@ -15,4 +15,7 @@ class ChatBedrock(BaseChatBedrock):
             'model_kwargs': dict(temperature=0),
         }
 
+        # if model_id.startswith('arn:') or 'claude-sonnet-4' in model_id:
+        #     default_kwargs['provider'] = 'anthropic'
+
         super().__init__(**(default_kwargs | kwargs))
