@@ -7,8 +7,8 @@ services:
   falkordb:
     container_name: falkordb
     image: falkordb/falkordb:latest
-    volumes:
-      - ./falkordb_data:/var/lib/falkordb/data
+    # volumes:
+    #   - ./falkordb_data:/var/lib/falkordb/data
     ports:
       - 3000:3000
       - 6379:6379
