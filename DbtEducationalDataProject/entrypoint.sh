@@ -3,6 +3,8 @@
 # Install dependencies
 dbt deps --profiles-dir .
 
+dbt build --profiles-dir .
+
 # Generate documentation
 dbt docs generate --target container --profiles-dir .
 
