@@ -30,16 +30,24 @@ MATCH (start:Model {{name: 'stg_students'}})-[:DEPENDS_ON]->(upstream:Model)
 RETURN upstream.name AS model_name, upstream.materialized AS materialization_type
 ORDER BY model_name
 
+## Full-Text Search (DBT_Fulltext_Search)
+A full-text index over model descriptions. Use it to:
+- Find models by exact keywords or name fragments (e.g. "retention", "GPA", "tuition")
+- Prefix search: "stud*" matches student, students, etc.
+- Boolean operators: "retention AND graduation", "financial NOT aid"
+- Faster and more precise than semantic search when the user provides specific terms
+
 ## Semantic Search (DBT_Semantic_Search)
 A vector index over model descriptions and column descriptions. Use it to:
-- Find models or columns by business concept (e.g. "student retention", "financial aid", "grade inflation")
-- Discover what a model or column represents without knowing its exact name
-- Answer "which models deal with X?" type questions
+- Find models or columns by business concept or meaning
+- Discover models related to a domain without knowing exact names
+- Answer "which models deal with X?" when X is a concept, not a keyword
 
 ## Tool selection guide
 - Structural / lineage questions → {graphdb_name} retriever (Cypher)
-- Semantic / concept questions → DBT_Semantic_Search
-- Complex questions → use both tools and combine the results"""
+- Specific keywords or name fragments → DBT_Fulltext_Search
+- Business concepts or meaning → DBT_Semantic_Search
+- Complex questions → combine tools"""
 
 
 class LLMEventType(Enum):
@@ -104,6 +112,11 @@ class ChatMessage:
                 query = event['data']['input'].get('query', '')
                 if tool_name == 'DBT_Semantic_Search':
                     content = f'\n\n**Semantic search:** `{query}`\n'
+                elif tool_name == 'DBT_Fulltext_Search':
+                    content = (
+                        f'\n\n**Full-text search:** `{query}`  \n'
+                        f'*Searching: name, description, schema, alias, materialized, resource\\_type*\n'
+                    )
                 else:
                     content = f'\n\n**{tool_name}:**\n```\n{query}\n```\n'
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, content)
@@ -111,11 +124,38 @@ class ChatMessage:
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
             case 'on_tool_end':
                 tool_name = event.get('name', '')
-                if tool_name == 'DBT_Semantic_Search':
+                if tool_name in ('DBT_Semantic_Search', 'DBT_Fulltext_Search'):
                     output = event['data'].get('output', '')
+                    search_label = 'Semantic' if tool_name == 'DBT_Semantic_Search' else 'Full-text'
                     if output:
-                        return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI,
-                                           f'\n**Semantic search results:**\n```\n{output}\n```\n')
+                        node_types = {'Model', 'Source', 'Seed', 'Snapshot',
+                                      'model', 'source', 'seed', 'snapshot'}
+                        bullets = []
+                        reranked = False
+                        for line in output.splitlines():
+                            line = line.strip()
+                            if not line:
+                                continue
+                            # Parse optional score prefix: [rerank:0.95] or [knn:0.87]
+                            score_str = ''
+                            if line.startswith('[rerank:'):
+                                reranked = True
+                                end = line.index(']')
+                                score_str = f' _(rerank: {line[8:end]})_'
+                                line = line[end + 2:]
+                            elif line.startswith('[knn:'):
+                                end = line.index(']')
+                                score_str = f' _(knn: {line[5:end]})_'
+                                line = line[end + 2:]
+                            if line.split(':')[0].strip() in node_types:
+                                bullets.append(f'- {line}{score_str}')
+                        if bullets:
+                            suffix = ' · reranked with Amazon Rerank 1.0' if reranked else ''
+                            header = f'\n**{search_label} search found{suffix}:**\n'
+                            content = header + '\n'.join(bullets) + '\n'
+                        else:
+                            content = f'\n**{search_label} search results:**\n```\n{output}\n```\n'
+                        return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, content)
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
             case 'on_prompt_end' | 'on_parser_end':
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')

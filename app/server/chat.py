@@ -13,7 +13,7 @@ from langchain.chains import FalkorDBQAChain
 from langchain_community.graphs import FalkorDBGraph
 from langchain_core.tools import create_retriever_tool
 
-from app.rag.vector_index import FalkorDBNodeRetriever
+from app.rag.vector_index import FalkorDBNodeRetriever, FalkorDBFulltextRetriever
 
 chat_router = APIRouter()
 
@@ -65,6 +65,23 @@ async def chat(
                 "Query the dbt knowledge graph using Cypher to retrieve model "
                 "lineage, dependencies, tests and metadata. Use for structural "
                 "questions: what depends on X, what does Y test, etc."
+            ),
+        ))
+
+        # Full-text search over description property
+        fulltext_retriever = FalkorDBFulltextRetriever(
+            host='falkordb', port=6379,
+            username=graph_user, password=graph_password,
+            k=5,
+        )
+        tools.append(create_retriever_tool(
+            fulltext_retriever,
+            name="DBT_Fulltext_Search",
+            description=(
+                "Search for dbt models by keywords in their descriptions using "
+                "full-text search. Supports prefix matching (e.g. 'stud*'), "
+                "fuzzy matching, and boolean operators (AND, OR, NOT). Use when "
+                "the user provides specific terms or model name fragments."
             ),
         ))
 

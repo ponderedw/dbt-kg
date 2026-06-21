@@ -6,7 +6,7 @@ from typing import Annotated
 
 from dbt_graph_loader.loaders.falkordb_loader import DBTFalkorDBLoader
 from dbt_graph_loader.loaders.neo4j_loader import DBTNeo4jLoader
-from app.rag.vector_index import build_node_embeddings
+from app.rag.vector_index import build_node_embeddings, build_fulltext_index
 
 embeddings_router = APIRouter()
 
@@ -39,6 +39,10 @@ async def upload_dbt_metadata(catalog_file: Annotated[UploadFile, File()],
         build_node_embeddings(
             manifest_data=manifest_data,
             catalog_data=catalog_data,
+            username=graph_user,
+            password=graph_password,
+        )
+        build_fulltext_index(
             username=graph_user,
             password=graph_password,
         )

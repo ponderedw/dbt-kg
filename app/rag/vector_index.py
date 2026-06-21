@@ -139,11 +139,148 @@ def build_node_embeddings(
     logger.info("Stored embeddings on %d/%d nodes", updated, len(ids))
 
 
+_FULLTEXT_LABELS = ["Model", "Source", "Seed", "Snapshot"]
+_FULLTEXT_PROPERTIES = ["name", "description", "schema", "alias", "materialized", "resource_type"]
+
+
+def build_fulltext_index(
+    host: str = "falkordb",
+    port: int = 6379,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+) -> None:
+    """Create full-text indexes on key string properties of every embeddable label.
+
+    Indexes: name, description, schema, alias, materialized, resource_type.
+    Idempotent — safe to call on every upload.
+    """
+    db = FalkorDB(host=host, port=port, username=username, password=password)
+    graph = db.select_graph(GRAPH_NAME)
+
+    props = ", ".join(f"n.{p}" for p in _FULLTEXT_PROPERTIES)
+    for label in _FULLTEXT_LABELS:
+        try:
+            graph.query(f"CREATE FULLTEXT INDEX FOR (n:{label}) ON ({props})")
+            logger.info("Created fulltext index on %s (%s)", label, ", ".join(_FULLTEXT_PROPERTIES))
+        except Exception as e:
+            logger.debug("Fulltext index on %s already exists or failed: %s", label, e)
+
+
+class FalkorDBFulltextRetriever(BaseRetriever):
+    """Retrieve dbt graph nodes by full-text search over their description property."""
+
+    host: str = "falkordb"
+    port: int = 6379
+    username: Optional[str] = None
+    password: Optional[str] = None
+    k: int = 5
+    labels: List[str] = Field(default=_FULLTEXT_LABELS)
+
+    def _get_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun,
+    ) -> List[Document]:
+        db = FalkorDB(
+            host=self.host, port=self.port,
+            username=self.username, password=self.password,
+        )
+        graph = db.select_graph(GRAPH_NAME)
+
+        docs: list[Document] = []
+        seen: set[str] = set()
+
+        for label in self.labels:
+            try:
+                result = graph.query(
+                    f"CALL db.idx.fulltext.queryNodes('{label}', $query) "
+                    f"YIELD node, score "
+                    f"RETURN node.name AS name, node.description AS description, "
+                    f"node.unique_id AS unique_id, node.resource_type AS resource_type, score",
+                    {"query": query},
+                )
+                for row in result.result_set:
+                    uid = row[2]
+                    if uid in seen:
+                        continue
+                    seen.add(uid)
+                    name, description, _, resource_type, score = row
+                    docs.append(Document(
+                        page_content=f"{resource_type}: {name}\n{description or ''}",
+                        metadata={
+                            "unique_id": uid,
+                            "name": name,
+                            "resource_type": resource_type,
+                            "score": score,
+                        },
+                    ))
+            except Exception as e:
+                logger.debug("Fulltext query skipped for label %s: %s", label, e)
+
+        docs.sort(key=lambda d: d.metadata.get("score", 0), reverse=True)
+        return docs[: self.k]
+
+
+def _rerank(query: str, docs: list[Document], top_n: int) -> tuple[list[Document], bool]:
+    """Rerank documents with Amazon Bedrock Rerank 1.0.
+
+    Returns (reranked_docs, was_reranked). Falls back to original order on any
+    error or when the provider is not Bedrock.
+    """
+    model_type = os.environ.get("LLM_MODEL_ID", "").split(":")[0]
+    if model_type != "bedrock" or not docs:
+        return docs[:top_n], False
+
+    try:
+        import boto3
+        session = boto3.session.Session()
+        region = session.region_name or "us-east-1"
+        client = boto3.client("bedrock-agent-runtime", region_name=region)
+
+        response = client.rerank(
+            rerankingConfiguration={
+                "type": "BEDROCK_RERANKING_MODEL",
+                "bedrockRerankingConfiguration": {
+                    "modelConfiguration": {
+                        "modelArn": f"arn:aws:bedrock:{region}::foundation-model/amazon.rerank-v1:0",
+                    },
+                    "numberOfResults": min(top_n, len(docs)),
+                },
+            },
+            sources=[
+                {
+                    "type": "INLINE",
+                    "inlineDocumentSource": {
+                        "type": "TEXT",
+                        "textDocument": {"text": doc.page_content},
+                    },
+                }
+                for doc in docs
+            ],
+            textQuery={"text": query},
+        )
+
+        reranked: list[Document] = []
+        for result in response.get("rerankingResults", []):
+            doc = docs[result["index"]]
+            doc.metadata["rerank_score"] = round(result["relevanceScore"], 4)
+            reranked.append(doc)
+
+        logger.info("Reranked %d docs with Amazon Rerank 1.0", len(reranked))
+        return reranked, True
+
+    except Exception as e:
+        logger.warning("Reranking failed, using KNN order: %s", e)
+        return docs[:top_n], False
+
+
 class FalkorDBNodeRetriever(BaseRetriever):
-    """Retrieve dbt graph nodes by semantic similarity.
+    """Retrieve dbt graph nodes by semantic similarity + optional Bedrock reranking.
 
     Queries the `embedding` property stored on Model / Source / Seed /
-    Snapshot nodes directly in dbt_graph using FalkorDB's vector KNN index.
+    Snapshot nodes directly in dbt_graph using FalkorDB's vector KNN index,
+    then reranks with Amazon Rerank 1.0 when running on Bedrock.
     """
 
     host: str = "falkordb"
@@ -198,4 +335,15 @@ class FalkorDBNodeRetriever(BaseRetriever):
                 logger.debug("Vector KNN query skipped for label %s: %s", label, e)
 
         docs.sort(key=lambda d: d.metadata.get("score", 0), reverse=True)
-        return docs[: self.k]
+
+        # Rerank with Amazon Rerank 1.0 if on Bedrock
+        docs, was_reranked = _rerank(query, docs, self.k)
+
+        # Prefix each doc with its score so Streamlit can surface it
+        score_key = "rerank_score" if was_reranked else "score"
+        for doc in docs:
+            score = doc.metadata.get(score_key, "")
+            label = "rerank" if was_reranked else "knn"
+            doc.page_content = f"[{label}:{score}] {doc.page_content}"
+
+        return docs
