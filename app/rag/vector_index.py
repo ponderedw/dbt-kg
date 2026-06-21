@@ -235,15 +235,21 @@ def _rerank(query: str, docs: list[Document], top_n: int) -> tuple[list[Document
     try:
         import boto3
         session = boto3.session.Session()
-        region = session.region_name or "us-east-1"
+        region = session.region_name or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
         client = boto3.client("bedrock-agent-runtime", region_name=region)
+
+        # Allow full ARN override; otherwise build from model ID
+        model_arn = os.environ.get("BEDROCK_RERANKER_MODEL_ARN")
+        if not model_arn:
+            model_id = os.environ.get("BEDROCK_RERANKER_MODEL_ID", "cohere.rerank-v3-5:0")
+            model_arn = f"arn:aws:bedrock:{region}::foundation-model/{model_id}"
 
         response = client.rerank(
             rerankingConfiguration={
                 "type": "BEDROCK_RERANKING_MODEL",
                 "bedrockRerankingConfiguration": {
                     "modelConfiguration": {
-                        "modelArn": f"arn:aws:bedrock:{region}::foundation-model/amazon.rerank-v1:0",
+                        "modelArn": model_arn,
                     },
                     "numberOfResults": min(top_n, len(docs)),
                 },
@@ -258,16 +264,32 @@ def _rerank(query: str, docs: list[Document], top_n: int) -> tuple[list[Document
                 }
                 for doc in docs
             ],
-            textQuery={"text": query},
+            queries=[{"type": "TEXT", "textQuery": {"text": query}}],
         )
 
+        # Bedrock Rerank response key depends on the model:
+        # Amazon models use "rerankingResults"; Cohere models use "results"
+        reranking_results = response.get("results") or response.get("rerankingResults") or []
+        logger.info("Rerank API returned %d results (model_arn=%s)", len(reranking_results), model_arn)
+        if not reranking_results:
+            logger.warning("Rerank API succeeded but returned no results — check model ARN or quota")
+            return docs[:top_n], False
+
         reranked: list[Document] = []
-        for result in response.get("rerankingResults", []):
-            doc = docs[result["index"]]
-            doc.metadata["rerank_score"] = round(result["relevanceScore"], 4)
+        for result in reranking_results:
+            idx = result.get("index")
+            score = result.get("relevanceScore")
+            logger.debug("  rerank result index=%s score=%s", idx, score)
+            if idx is None or idx >= len(docs):
+                logger.warning("Rerank result index %s out of range (docs=%d)", idx, len(docs))
+                continue
+            doc = docs[idx]
+            doc.metadata["rerank_score"] = round(score, 4) if score is not None else 0.0
             reranked.append(doc)
 
-        logger.info("Reranked %d docs with Amazon Rerank 1.0", len(reranked))
+        logger.info("Reranked %d/%d docs", len(reranked), len(docs))
+        if not reranked:
+            return docs[:top_n], False
         return reranked, True
 
     except Exception as e:
@@ -336,14 +358,26 @@ class FalkorDBNodeRetriever(BaseRetriever):
 
         docs.sort(key=lambda d: d.metadata.get("score", 0), reverse=True)
 
-        # Rerank with Amazon Rerank 1.0 if on Bedrock
-        docs, was_reranked = _rerank(query, docs, self.k)
+        # Rerank with Amazon Rerank 1.0 if on Bedrock (passes all candidates)
+        reranked_docs, was_reranked = _rerank(query, docs, self.k)
 
-        # Prefix each doc with its score so Streamlit can surface it
-        score_key = "rerank_score" if was_reranked else "score"
-        for doc in docs:
-            score = doc.metadata.get(score_key, "")
-            label = "rerank" if was_reranked else "knn"
-            doc.page_content = f"[{label}:{score}] {doc.page_content}"
+        if was_reranked:
+            # Show all KNN candidates so the user can see what the reranker chose from.
+            knn_lines = [
+                f"[similarity:{d.metadata.get('score', '')}] {d.page_content}"
+                for d in docs
+            ]
+            reranked_lines = [
+                f"[rerank:{d.metadata.get('rerank_score', '')}] {d.page_content}"
+                for d in reranked_docs
+            ]
+            combined = (
+                f"===KNN({len(docs)})===\n" + "\n".join(knn_lines) +
+                "\n===RERANKED===\n" + "\n".join(reranked_lines)
+            )
+            return [Document(page_content=combined)]
 
-        return docs
+        # No reranking: return top-k by similarity score
+        for doc in docs[:self.k]:
+            doc.page_content = f"[similarity:{doc.metadata.get('score', '')}] {doc.page_content}"
+        return docs[:self.k]

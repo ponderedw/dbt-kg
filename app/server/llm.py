@@ -100,9 +100,6 @@ class ChatMessage:
     @classmethod
     def from_event(cls, event: dict) -> 'ChatMessage':
         """Convert an event from the LLM agent to a `ChatMessage` object."""
-        if event['event'] in ('on_tool_start', 'on_tool_end'):
-            print(event)
-            print('--------------------')
         match event['event']:
             case 'on_chat_model_stream':
                 if event['data']['chunk'].content:
@@ -111,7 +108,11 @@ class ChatMessage:
                 tool_name = event.get('name', 'Tool')
                 query = event['data']['input'].get('query', '')
                 if tool_name == 'DBT_Semantic_Search':
-                    content = f'\n\n**Semantic search:** `{query}`\n'
+                    rerank_note = ''
+                    if os.environ.get('LLM_MODEL_ID', '').startswith('bedrock'):
+                        reranker = os.environ.get('BEDROCK_RERANKER_MODEL_ID', 'cohere.rerank-v3-5:0')
+                        rerank_note = f'  \n*Reranking with {reranker}…*'
+                    content = f'\n\n**Semantic search:** `{query}`{rerank_note}\n'
                 elif tool_name == 'DBT_Fulltext_Search':
                     content = (
                         f'\n\n**Full-text search:** `{query}`  \n'
@@ -125,36 +126,82 @@ class ChatMessage:
             case 'on_tool_end':
                 tool_name = event.get('name', '')
                 if tool_name in ('DBT_Semantic_Search', 'DBT_Fulltext_Search'):
-                    output = event['data'].get('output', '')
+                    raw = event['data'].get('output', '')
+                    output = raw.content if hasattr(raw, 'content') else str(raw)
                     search_label = 'Semantic' if tool_name == 'DBT_Semantic_Search' else 'Full-text'
                     if output:
                         node_types = {'Model', 'Source', 'Seed', 'Snapshot',
                                       'model', 'source', 'seed', 'snapshot'}
-                        bullets = []
-                        reranked = False
-                        for line in output.splitlines():
-                            line = line.strip()
-                            if not line:
-                                continue
-                            # Parse optional score prefix: [rerank:0.95] or [knn:0.87]
-                            score_str = ''
-                            if line.startswith('[rerank:'):
-                                reranked = True
-                                end = line.index(']')
-                                score_str = f' _(rerank: {line[8:end]})_'
-                                line = line[end + 2:]
-                            elif line.startswith('[knn:'):
-                                end = line.index(']')
-                                score_str = f' _(knn: {line[5:end]})_'
-                                line = line[end + 2:]
-                            if line.split(':')[0].strip() in node_types:
-                                bullets.append(f'- {line}{score_str}')
-                        if bullets:
-                            suffix = ' · reranked with Amazon Rerank 1.0' if reranked else ''
-                            header = f'\n**{search_label} search found{suffix}:**\n'
-                            content = header + '\n'.join(bullets) + '\n'
+
+                        def _parse_bullets(lines):
+                            bullets = []
+                            for line in lines:
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                score_str = ''
+                                if line.startswith('[rerank:'):
+                                    end = line.index(']')
+                                    score_str = f' _(rerank: {line[8:end]})_'
+                                    line = line[end + 2:]
+                                elif line.startswith('[similarity:'):
+                                    end = line.index(']')
+                                    score_str = f' _(similarity: {line[12:end]})_'
+                                    line = line[end + 2:]
+                                if line.split(':')[0].strip() in node_types:
+                                    bullets.append(f'- {line}{score_str}')
+                            return bullets
+
+                        import re as _re
+                        knn_header_match = _re.search(r'===KNN\((\d+)\)===', output)
+                        if knn_header_match and '===RERANKED===' in output:
+                            knn_count = knn_header_match.group(1)
+                            knn_part, reranked_part = output.split('===RERANKED===', 1)
+                            knn_lines = _re.split(r'===KNN\(\d+\)===', knn_part)[-1].splitlines()
+                            reranked_lines = reranked_part.splitlines()
+                            knn_bullets = _parse_bullets(knn_lines)
+                            reranked_bullets = _parse_bullets(reranked_lines)
+                            reranker = os.environ.get('BEDROCK_RERANKER_MODEL_ID', 'cohere.rerank-v3-5:0')
+                            content = ''
+                            if knn_bullets:
+                                content += f'\n**{search_label} — {knn_count} candidates by vector similarity (sent to reranker):**\n' + '\n'.join(knn_bullets) + '\n\n'
+                            if reranked_bullets:
+                                content += f'**Top {len(reranked_bullets)} reranked by {reranker}:**\n' + '\n'.join(reranked_bullets) + '\n\n'
+                            elif knn_bullets:
+                                content += f'*⚠️ Reranker ({reranker}): none returned — check FastAPI logs*\n\n'
+                            if not content:
+                                content = f'\n**{search_label} search results:**\n```\n{output}\n```\n'
                         else:
-                            content = f'\n**{search_label} search results:**\n```\n{output}\n```\n'
+                            bullets = []
+                            reranked = False
+                            for line in output.splitlines():
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                score_str = ''
+                                if line.startswith('[rerank:'):
+                                    reranked = True
+                                    end = line.index(']')
+                                    score_str = f' _(rerank: {line[8:end]})_'
+                                    line = line[end + 2:]
+                                elif line.startswith('[similarity:'):
+                                    end = line.index(']')
+                                    score_str = f' _(similarity: {line[12:end]})_'
+                                    line = line[end + 2:]
+                                if line.split(':')[0].strip() in node_types:
+                                    bullets.append(f'- {line}{score_str}')
+                            on_bedrock = os.environ.get('LLM_MODEL_ID', '').startswith('bedrock')
+                            if bullets:
+                                if reranked:
+                                    suffix = ' · reranked'
+                                elif on_bedrock and tool_name == 'DBT_Semantic_Search':
+                                    suffix = ' · ⚠️ reranking failed (check FastAPI logs)'
+                                else:
+                                    suffix = ''
+                                header = f'\n**{search_label} search found{suffix}:**\n'
+                                content = header + '\n'.join(bullets) + '\n\n'
+                            else:
+                                content = f'\n**{search_label} search results:**\n```\n{output}\n```\n'
                         return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, content)
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
             case 'on_prompt_end' | 'on_parser_end':
@@ -180,13 +227,11 @@ class ChatMessage:
     def _handle_on_chat_model_stream(cls, event: dict) -> 'ChatMessage':
         content = event['data']['chunk'].content
         content_type = ''
-        print(f"orig content: {event}")
         if event.get('metadata', {}).get('langgraph_node') == 'tools':
             return ''
         if not isinstance(content, str):
             content_type = content[0]['type']
             content = content[0].get('text')
-        print(f'_handle_on_chat_model_stream: {content_type} {content}')
         # If the message is a tool call, just print a debug message.
         if content_type in ('tool_use', 'tool_call'):
             Logger().get_logger().debug('Stream.tool_calls:',
