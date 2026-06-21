@@ -13,24 +13,33 @@ import os
 
 
 graphdb_name = os.environ.get('GRAPH_DB')
-PROMPT_MESSAGE = f"""You are a DBT Knowledge Assistant with access to a {graphdb_name} database containing our dbt project metadata. 
+PROMPT_MESSAGE = f"""You are a DBT Knowledge Assistant with access to a {graphdb_name} knowledge graph and a semantic vector index containing our dbt project metadata.
 
-The database schema includes:
-- Node Types: Model, Source, Macro, Test, Seed, Snapshot
-- Model attributes: materialized, resource_type, alias, schema
-- Relationships: DEPENDS_ON, REFERENCES, TESTS, USES_MACRO
+## Knowledge Graph ({graphdb_name})
+Node types: Model, Source, Macro, Test, Seed, Snapshot
+Model attributes: name, materialized, resource_type, alias, schema, description
+Relationships: DEPENDS_ON, REFERENCES, TESTS, USES_MACRO
 
-For example, to find all the fownstreams of stg_students model, use:
+Example – find all downstreams of stg_students:
 MATCH (start:Model {{name: 'stg_students'}})<-[:DEPENDS_ON]-(downstream:Model)
 RETURN downstream.name AS model_name, downstream.materialized AS materialization_type
 ORDER BY model_name
 
-Upstreams:
+Example – find all upstreams of stg_students:
 MATCH (start:Model {{name: 'stg_students'}})-[:DEPENDS_ON]->(upstream:Model)
 RETURN upstream.name AS model_name, upstream.materialized AS materialization_type
 ORDER BY model_name
 
-Use the {graphdb_name} retriever to answer questions about model lineage, dependencies, testing coverage, and data flow in our dbt project."""
+## Semantic Search (DBT_Semantic_Search)
+A vector index over model descriptions and column descriptions. Use it to:
+- Find models or columns by business concept (e.g. "student retention", "financial aid", "grade inflation")
+- Discover what a model or column represents without knowing its exact name
+- Answer "which models deal with X?" type questions
+
+## Tool selection guide
+- Structural / lineage questions → {graphdb_name} retriever (Cypher)
+- Semantic / concept questions → DBT_Semantic_Search
+- Complex questions → use both tools and combine the results"""
 
 
 class LLMEventType(Enum):
@@ -91,20 +100,25 @@ class ChatMessage:
                 if event['data']['chunk'].content:
                     return cls._handle_on_chat_model_stream(event)
             case 'on_tool_start':
-                return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI,
-                                   f'''\n\nStart Running Tool:
-```
-{event['data']['input']['query']}
-```
-''')
+                tool_name = event.get('name', 'Tool')
+                query = event['data']['input'].get('query', '')
+                if tool_name == 'DBT_Semantic_Search':
+                    content = f'\n\n**Semantic search:** `{query}`\n'
+                else:
+                    content = f'\n\n**{tool_name}:**\n```\n{query}\n```\n'
+                return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, content)
             case 'on_prompt_start' | 'on_parser_start':
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
-            case 'on_tool_end' | 'on_prompt_end' | 'on_parser_end':
-                return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI,
-#                                    f'''\n\nTool Output: \n```\n
-# {event['data']['output'].content}
-# \n```\n''')
-                                   '')
+            case 'on_tool_end':
+                tool_name = event.get('name', '')
+                if tool_name == 'DBT_Semantic_Search':
+                    output = event['data'].get('output', '')
+                    if output:
+                        return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI,
+                                           f'\n**Semantic search results:**\n```\n{output}\n```\n')
+                return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
+            case 'on_prompt_end' | 'on_parser_end':
+                return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
             # The conversation is done.
             case 'done':
                 return ChatMessage(
@@ -114,8 +128,8 @@ class ChatMessage:
                 )
             # Known events that we ignore.
             case 'on_chat_model_start' | 'on_chain_start' | 'on_chain_end' \
-                | 'on_chat_model_stream' | 'on_chat_model_end' | \
-                    'on_chain_stream':
+                | 'on_chat_model_stream' | 'on_chat_model_end' | 'on_chain_stream' \
+                | 'on_retriever_start' | 'on_retriever_end':
                 Logger().get_logger().debug('Ignoring message', event['event'])
                 return ''
             # Unknown events.

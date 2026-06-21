@@ -11,31 +11,11 @@ from app.server.llm import LLMAgent
 from langchain_neo4j import GraphCypherQAChain, Neo4jGraph
 from langchain.chains import FalkorDBQAChain
 from langchain_community.graphs import FalkorDBGraph
-from langchain_core.prompts.prompt import PromptTemplate
-# from langchain.callbacks import TimeoutCallback
+from langchain_core.tools import create_retriever_tool
+
+from app.rag.vector_index import FalkorDBNodeRetriever
 
 chat_router = APIRouter()
-
-# CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph database.
-# Instructions:
-# Use only the provided relationship types and properties in the schema.
-# Do not use any other relationship types or properties that are not provided.
-# Schema:
-# {schema}
-# Note: Do not include any explanations or apologies in your responses.
-# Do not respond to any questions that might ask anything else than for you to construct a Cypher statement.
-# Do not include any text except the generated Cypher statement.
-# Examples: Here are a few examples of generated Cypher statements for particular questions:
-# # How many people work for TechCorp?
-# MATCH (a:Company {name: "TechCorp"})<-[c:WORKS_FOR*]-(b)
-# RETURN count(distinct b) as numberOfWorkers
-
-# The question is:
-# {question}"""
-
-# CYPHER_GENERATION_PROMPT = PromptTemplate(
-#     input_variables=["schema", "question"], template=CYPHER_GENERATION_TEMPLATE
-# )
 
 
 class ChatRequest(BaseModel):
@@ -62,38 +42,73 @@ async def chat(
     if 'chat_session_id' not in request.session:
         await new_chat(request)
     session_id = request.session['chat_session_id']
-    # Get the user chat configuration and the LLM agent.
     user_config = get_user_chat_config(session_id)
-    retriever_tool = None
-    if os.environ.get('GRAPH_DB') == 'falkordb':
-        graph = FalkorDBGraph(host='falkordb', port=6379, database="dbt_graph",
-                              username=os.environ.get('GRAPH_USER'),
-                              password=os.environ.get('GRAPH_PASSWORD'
-                                                      ),)
-        chain = FalkorDBQAChain.from_llm(ChatModel(), graph=graph, verbose=True, allow_dangerous_requests=True, top_k=100)
-        retriever_tool = chain.as_tool(name="Falkor_Knowledge_Graph_Retriever",
-                                            description="Query and retrieve data from your Falkor graph database using Cypher syntax")
-    elif os.environ.get('GRAPH_DB') == 'neo4j':
-        graph = Neo4jGraph(url="bolt://neo4j:7687",
-                           username=os.environ.get('GRAPH_USER'),
-                           password=os.environ.get('GRAPH_PASSWORD'),
-                           enhanced_schema=True)
+
+    graph_db = os.environ.get('GRAPH_DB')
+    graph_user = os.environ.get('GRAPH_USER')
+    graph_password = os.environ.get('GRAPH_PASSWORD')
+
+    tools = []
+
+    if graph_db == 'falkordb':
+        graph = FalkorDBGraph(
+            host='falkordb', port=6379, database="dbt_graph",
+            username=graph_user, password=graph_password,
+        )
+        chain = FalkorDBQAChain.from_llm(
+            ChatModel(), graph=graph, verbose=True,
+            allow_dangerous_requests=True, top_k=100,
+        )
+        tools.append(chain.as_tool(
+            name="Falkor_Knowledge_Graph_Retriever",
+            description=(
+                "Query the dbt knowledge graph using Cypher to retrieve model "
+                "lineage, dependencies, tests and metadata. Use for structural "
+                "questions: what depends on X, what does Y test, etc."
+            ),
+        ))
+
+        # Semantic search over embeddings stored on graph nodes
+        retriever = FalkorDBNodeRetriever(
+            host='falkordb', port=6379,
+            username=graph_user, password=graph_password,
+            k=5,
+        )
+        tools.append(create_retriever_tool(
+            retriever,
+            name="DBT_Semantic_Search",
+            description=(
+                "Search for dbt models by meaning or business concept using "
+                "semantic similarity. The embeddings are stored directly on "
+                "graph nodes. Use when the question is about what a model "
+                "represents, or to find models related to a domain "
+                "(e.g. 'financial aid', 'student retention', 'grade inflation')."
+            ),
+        ))
+
+    elif graph_db == 'neo4j':
+        graph = Neo4jGraph(
+            url="bolt://neo4j:7687",
+            username=graph_user,
+            password=graph_password,
+            enhanced_schema=True,
+        )
         chain = GraphCypherQAChain.from_llm(
-            ChatModel(),
-            graph=graph,
-            verbose=True,
+            ChatModel(), graph=graph, verbose=True,
             allow_dangerous_requests=True,
         )
-        retriever_tool = chain.as_tool(name="Neo4J_Knowledge_Graph_Retriever",
-                                       description="Query your Neo4j graph database using Cypher to retrieve nodes, relationships, and insights.")
-    tools = [retriever_tool] if retriever_tool else []
+        tools.append(chain.as_tool(
+            name="Neo4J_Knowledge_Graph_Retriever",
+            description=(
+                "Query your Neo4j graph database using Cypher to retrieve "
+                "nodes, relationships, and insights."
+            ),
+        ))
 
     async def stream_agent_response():
         async with LLMAgent(tools=tools) as llm_agent:
             async for chat_msg in llm_agent.astream_events(
-                 chat_request.message, user_config):
+                    chat_request.message, user_config):
                 yield chat_msg.content
 
-    # Return the agent's response as a stream of JSON objects.
-    return StreamingResponse(stream_agent_response(),
-                             media_type='application/json')
+    return StreamingResponse(stream_agent_response(), media_type='application/json')
