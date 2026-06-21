@@ -191,6 +191,14 @@ class FalkorDBFulltextRetriever(BaseRetriever):
         docs: list[Document] = []
         seen: set[str] = set()
 
+        # FalkorDB fulltext uses Redisearch syntax. Multi-word queries default to AND
+        # which is too strict for short descriptions. Convert to OR so we get results
+        # and let the score ranking surface the best matches.
+        if ' ' in query and '|' not in query and '"' not in query:
+            search_query = ' | '.join(query.split())
+        else:
+            search_query = query
+
         for label in self.labels:
             try:
                 result = graph.query(
@@ -198,7 +206,7 @@ class FalkorDBFulltextRetriever(BaseRetriever):
                     f"YIELD node, score "
                     f"RETURN node.name AS name, node.description AS description, "
                     f"node.unique_id AS unique_id, node.resource_type AS resource_type, score",
-                    {"query": query},
+                    {"query": search_query},
                 )
                 for row in result.result_set:
                     uid = row[2]
@@ -207,7 +215,7 @@ class FalkorDBFulltextRetriever(BaseRetriever):
                     seen.add(uid)
                     name, description, _, resource_type, score = row
                     docs.append(Document(
-                        page_content=f"{resource_type}: {name}\n{description or ''}",
+                        page_content=f"[fulltext:{round(score, 4)}] {resource_type}: {name}\n{description or ''}",
                         metadata={
                             "unique_id": uid,
                             "name": name,
@@ -216,7 +224,7 @@ class FalkorDBFulltextRetriever(BaseRetriever):
                         },
                     ))
             except Exception as e:
-                logger.debug("Fulltext query skipped for label %s: %s", label, e)
+                logger.warning("Fulltext query failed for label %s: %s", label, e)
 
         docs.sort(key=lambda d: d.metadata.get("score", 0), reverse=True)
         return docs[: self.k]
