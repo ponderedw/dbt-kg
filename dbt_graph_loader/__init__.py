@@ -15,7 +15,7 @@ def load_to_neo4j(uri: str, username: str, password: str, manifest_path: str, ca
 
 
 def load_to_falkordb(host: str = 'localhost', port: int = 6379, graph_name: str = 'dbt_graph',
-                    username: str = None, password: str = None, manifest_path: str = None, 
+                    username: str = None, password: str = None, manifest_path: str = None,
                     catalog_path: str = None):
     """Convenience function to load DBT data into FalkorDB."""
     loader = DBTFalkorDBLoader(host, port, graph_name, username, password)
@@ -25,9 +25,20 @@ def load_to_falkordb(host: str = 'localhost', port: int = 6379, graph_name: str 
     # finally:
     #     loader.close()
 
+
+def incremental_update_falkordb(host: str = 'localhost', port: int = 6379, graph_name: str = 'dbt_graph',
+                                username: str = None, password: str = None,
+                                old_manifest_path: str = None, new_manifest_path: str = None,
+                                catalog_path: str = None):
+    """Incrementally update a FalkorDB graph from two manifest files."""
+    loader = DBTFalkorDBLoader(host, port, graph_name, username, password)
+    loader.incremental_update_from_files(old_manifest_path, new_manifest_path, catalog_path)
+    loader.get_graph_stats()
+
 __all__ = [
     'DBTNeo4jLoader',
     'DBTFalkorDBLoader',
     'load_to_neo4j',
     'load_to_falkordb',
+    'incremental_update_falkordb',
 ]

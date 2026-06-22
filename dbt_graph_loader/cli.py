@@ -1,7 +1,7 @@
 """Simple command line interface for DBT Graph Loader."""
 
 import click
-from . import load_to_neo4j, load_to_falkordb
+from . import load_to_neo4j, load_to_falkordb, incremental_update_falkordb
 from .loaders.neo4j_loader import DBTNeo4jLoader
 from .loaders.falkordb_loader import DBTFalkorDBLoader
 
@@ -49,12 +49,24 @@ def neo4j(uri: str, username: str, password: str, manifest: str, catalog: str):
 @click.option('--password', help='FalkorDB password')
 @click.option('--manifest', required=True, help='Path to manifest.json')
 @click.option('--catalog', help='Path to catalog.json (optional)')
-def falkordb(host: str, port: int, graph_name: str, username: str, password: str, manifest: str, catalog: str):
+@click.option('--incremental-run', is_flag=True, default=False, help='Only update nodes that changed vs the old manifest')
+@click.option('--old-manifest', help='Path to the previous manifest.json (required when --incremental-run is set)')
+def falkordb(host: str, port: int, graph_name: str, username: str, password: str,
+             manifest: str, catalog: str, incremental_run: bool, old_manifest: str):
     """Load DBT data into FalkorDB."""
     try:
-        click.echo("Loading into FalkorDB...")
-        load_to_falkordb(host, port, graph_name, username, password, manifest, catalog)
-        click.echo("✅ FalkorDB load completed!")
+        if incremental_run:
+            if not old_manifest:
+                raise click.UsageError("--old-manifest is required when --incremental-run is set")
+            click.echo("Running incremental FalkorDB update...")
+            incremental_update_falkordb(host, port, graph_name, username, password, old_manifest, manifest, catalog)
+            click.echo("✅ FalkorDB incremental update completed!")
+        else:
+            click.echo("Loading into FalkorDB...")
+            load_to_falkordb(host, port, graph_name, username, password, manifest, catalog)
+            click.echo("✅ FalkorDB load completed!")
+    except click.UsageError:
+        raise
     except Exception as e:
         click.echo(f"❌ Error: {e}")
 

@@ -10,6 +10,7 @@ DBT Graph Loader is a Python library that loads DBT (Data Build Tool) metadata i
 - **📊 Complete DBT Coverage**: Models, sources, tests, macros, seeds, snapshots, and operations
 - **🔗 Rich Relationships**: Dependencies, references, macro usage, and test coverage mapping
 - **📁 Flexible Input**: Load from `manifest.json` and `catalog.json` files or strings
+- **⚡ Incremental Updates**: Diff two manifests and apply only what changed — no full reload needed
 - **🛠️ Easy CLI**: Simple command-line interface for batch operations
 - **🐍 Python API**: Programmatic access for integration into data pipelines
 - **📈 Graph Analytics**: Built-in statistics and insights about your data lineage
@@ -118,14 +119,35 @@ Options:
 dbt-graph-loader falkordb --help
 
 Options:
-  --host TEXT        FalkorDB host (default: localhost)
-  --port INTEGER     FalkorDB port (default: 6379)
-  --graph-name TEXT  Graph name (default: dbt_graph)
-  --username TEXT    FalkorDB username (optional)
-  --password TEXT    FalkorDB password (optional)
-  --manifest TEXT    Path to manifest.json (required)
-  --catalog TEXT     Path to catalog.json (optional)
+  --host TEXT          FalkorDB host (default: localhost)
+  --port INTEGER       FalkorDB port (default: 6379)
+  --graph-name TEXT    Graph name (default: dbt_graph)
+  --username TEXT      FalkorDB username (optional)
+  --password TEXT      FalkorDB password (optional)
+  --manifest TEXT      Path to manifest.json (required)
+  --catalog TEXT       Path to catalog.json (optional)
+  --incremental-run    Only apply changes between old and new manifest (default: false)
+  --old-manifest TEXT  Path to the previous manifest.json (required when --incremental-run is set)
 ```
+
+#### Incremental update
+
+When `--incremental-run` is set, the loader diffs the two manifests by node checksum and applies only the minimum set of changes:
+
+- **Removed nodes** — deleted from the graph along with all their relationships
+- **Changed nodes** — properties updated in-place; outgoing relationships refreshed
+- **Added nodes** — inserted with their relationships
+- **Unchanged nodes** — not touched
+
+```bash
+dbt-graph-loader falkordb \
+    --host localhost \
+    --manifest target/manifest.json \
+    --incremental-run \
+    --old-manifest target/manifest_previous.json
+```
+
+This is significantly faster than a full reload for large projects where only a subset of models changes between runs.
 
 ### Python API
 
@@ -194,7 +216,7 @@ finally:
 #### Convenience Functions
 
 ```python
-from dbt_graph_loader import load_to_neo4j, load_to_falkordb
+from dbt_graph_loader import load_to_neo4j, load_to_falkordb, incremental_update_falkordb
 
 # Simple Neo4j loading
 load_to_neo4j(
@@ -205,12 +227,35 @@ load_to_neo4j(
     catalog_path="target/catalog.json"
 )
 
-# Simple FalkorDB loading
+# Simple FalkorDB loading (full reload)
 load_to_falkordb(
     host="localhost",
     port=6379,
     graph_name="dbt_lineage",
     manifest_path="target/manifest.json",
+    catalog_path="target/catalog.json"
+)
+
+# Incremental FalkorDB update
+incremental_update_falkordb(
+    host="localhost",
+    port=6379,
+    graph_name="dbt_lineage",
+    old_manifest_path="target/manifest_previous.json",
+    new_manifest_path="target/manifest.json",
+    catalog_path="target/catalog.json"  # optional
+)
+```
+
+Or directly via the loader:
+
+```python
+from dbt_graph_loader.loaders.falkordb_loader import DBTFalkorDBLoader
+
+loader = DBTFalkorDBLoader(host="localhost", port=6379)
+loader.incremental_update_from_files(
+    old_manifest_path="target/manifest_previous.json",
+    new_manifest_path="target/manifest.json",
     catalog_path="target/catalog.json"
 )
 ```

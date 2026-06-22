@@ -597,6 +597,396 @@ class DBTFalkorDBLoader:
         
         logger.info("DBT to FalkorDB load process completed successfully")
     
+    # ------------------------------------------------------------------ #
+    # Incremental update helpers                                           #
+    # ------------------------------------------------------------------ #
+
+    def _collect_all_nodes(self, manifest_data: dict) -> dict:
+        all_nodes = {}
+        all_nodes.update(manifest_data.get('nodes', {}))
+        all_nodes.update(manifest_data.get('sources', {}))
+        all_nodes.update(manifest_data.get('macros', {}))
+        return all_nodes
+
+    def _get_checksum(self, node_data: dict) -> str:
+        checksum = node_data.get('checksum')
+        if isinstance(checksum, dict):
+            return checksum.get('checksum', '')
+        return str(checksum) if checksum else ''
+
+    def _diff_manifests(self, old_manifest: dict, new_manifest: dict) -> tuple:
+        old_nodes = self._collect_all_nodes(old_manifest)
+        new_nodes = self._collect_all_nodes(new_manifest)
+        old_ids = set(old_nodes)
+        new_ids = set(new_nodes)
+        removed = old_ids - new_ids
+        added = new_ids - old_ids
+        changed = {
+            uid for uid in old_ids & new_ids
+            if self._get_checksum(old_nodes[uid]) != self._get_checksum(new_nodes[uid])
+        }
+        return added, changed, removed
+
+    def _delete_nodes(self, ids: set):
+        for uid in ids:
+            try:
+                self.graph.query(
+                    f"MATCH (n) WHERE n.unique_id = '{self._escape_string(uid)}' DETACH DELETE n"
+                )
+            except Exception as e:
+                logger.error(f"Error deleting node {uid}: {e}")
+        logger.info(f"Deleted {len(ids)} removed nodes")
+
+    def _delete_outgoing_relationships(self, ids: set):
+        for uid in ids:
+            try:
+                self.graph.query(
+                    f"MATCH (n)-[r]->() WHERE n.unique_id = '{self._escape_string(uid)}' DELETE r"
+                )
+            except Exception as e:
+                logger.error(f"Error deleting outgoing rels for {uid}: {e}")
+
+    def _upsert_node(self, label: str, var: str, uid: str, prop_strings: List[str]):
+        """MERGE a node by unique_id and SET all its properties."""
+        escaped_uid = self._escape_string(uid)
+        set_parts = []
+        for p in prop_strings:
+            sep_idx = p.index(': ')
+            key, val = p[:sep_idx], p[sep_idx + 2:]
+            set_parts.append(f"{var}.{key} = {val}")
+        query = f"MERGE ({var}:{label} {{unique_id: '{escaped_uid}'}}) SET {', '.join(set_parts)}"
+        self.graph.query(query)
+
+    def _upsert_models(self, models: Dict[str, Any], catalog_nodes: Dict[str, Any] = None):
+        catalog_nodes = catalog_nodes or {}
+        for model_id, model_data in models.items():
+            properties = {
+                'unique_id': self._escape_string(model_id),
+                'name': self._escape_string(model_data.get('name', '')),
+                'resource_type': self._escape_string(model_data.get('resource_type', '')),
+                'package_name': self._escape_string(model_data.get('package_name', '')),
+                'path': self._escape_string(model_data.get('path', '')),
+                'original_file_path': self._escape_string(model_data.get('original_file_path', '')),
+                'database': self._escape_string(model_data.get('database', '')),
+                'schema': self._escape_string(model_data.get('schema', '')),
+                'alias': self._escape_string(model_data.get('alias', '')),
+                'materialized': self._escape_string(model_data.get('config', {}).get('materialized', '')),
+                'description': self._escape_string(model_data.get('description', '')),
+                'checksum': self._escape_string(model_data.get('checksum', {}).get('checksum', '')),
+                'relation_name': self._escape_string(model_data.get('relation_name', '')),
+                'language': self._escape_string(model_data.get('language', 'sql')),
+            }
+            config = model_data.get('config', {})
+            properties.update({
+                'enabled': config.get('enabled', True),
+                'tags': str(config.get('tags', [])),
+                'meta': json.dumps(config.get('meta', {})),
+                'access': self._escape_string(config.get('access', '')),
+            })
+            if model_id in catalog_nodes:
+                catalog_info = catalog_nodes[model_id]
+                properties.update({
+                    'table_type': self._escape_string(catalog_info.get('metadata', {}).get('type', '')),
+                    'table_comment': self._escape_string(catalog_info.get('metadata', {}).get('comment', '')),
+                    'owner': self._escape_string(catalog_info.get('metadata', {}).get('owner', '')),
+                })
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Model', 'm', model_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting model {model_id}: {e}")
+        logger.info(f"Upserted {len(models)} model nodes")
+
+    def _upsert_sources(self, sources: Dict[str, Any]):
+        for source_id, source_data in sources.items():
+            source_name = source_data.get('source_name', '')
+            identifier = source_data.get('identifier', source_data.get('name', ''))
+            full_name = f"{source_name}.{identifier}" if source_name and identifier else identifier
+            properties = {
+                'unique_id': self._escape_string(source_id),
+                'name': self._escape_string(full_name),
+                'identifier': self._escape_string(identifier),
+                'resource_type': self._escape_string(source_data.get('resource_type', '')),
+                'package_name': self._escape_string(source_data.get('package_name', '')),
+                'source_name': self._escape_string(source_name),
+                'database': self._escape_string(source_data.get('database', '')),
+                'schema': self._escape_string(source_data.get('schema', '')),
+                'description': self._escape_string(source_data.get('description', '')),
+                'loader': self._escape_string(source_data.get('loader', '')),
+                'relation_name': self._escape_string(source_data.get('relation_name', '')),
+            }
+            freshness = source_data.get('freshness', {})
+            if freshness:
+                properties['freshness_warn_after'] = json.dumps(freshness.get('warn_after', {}))
+                properties['freshness_error_after'] = json.dumps(freshness.get('error_after', {}))
+            columns = source_data.get('columns', {})
+            if columns:
+                properties['column_count'] = len(columns)
+                properties['columns'] = json.dumps(columns)
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Source', 's', source_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting source {source_id}: {e}")
+        logger.info(f"Upserted {len(sources)} source nodes")
+
+    def _upsert_seeds(self, seeds: Dict[str, Any]):
+        for seed_id, seed_data in seeds.items():
+            config = seed_data.get('config', {})
+            properties = {
+                'unique_id': self._escape_string(seed_id),
+                'name': self._escape_string(seed_data.get('name', '')),
+                'resource_type': self._escape_string(seed_data.get('resource_type', '')),
+                'package_name': self._escape_string(seed_data.get('package_name', '')),
+                'path': self._escape_string(seed_data.get('path', '')),
+                'database': self._escape_string(seed_data.get('database', '')),
+                'schema': self._escape_string(seed_data.get('schema', '')),
+                'alias': self._escape_string(seed_data.get('alias', '')),
+                'relation_name': self._escape_string(seed_data.get('relation_name', '')),
+                'enabled': config.get('enabled', True),
+                'tags': str(config.get('tags', [])),
+                'materialized': self._escape_string(config.get('materialized', 'seed')),
+                'delimiter': self._escape_string(config.get('delimiter', ',')),
+            }
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Seed', 'seed', seed_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting seed {seed_id}: {e}")
+        logger.info(f"Upserted {len(seeds)} seed nodes")
+
+    def _upsert_snapshots(self, snapshots: Dict[str, Any]):
+        for snap_id, snap_data in snapshots.items():
+            config = snap_data.get('config', {})
+            properties = {
+                'unique_id': self._escape_string(snap_id),
+                'name': self._escape_string(snap_data.get('name', '')),
+                'resource_type': self._escape_string(snap_data.get('resource_type', '')),
+                'package_name': self._escape_string(snap_data.get('package_name', '')),
+                'path': self._escape_string(snap_data.get('path', '')),
+                'database': self._escape_string(snap_data.get('database', '')),
+                'schema': self._escape_string(snap_data.get('schema', '')),
+                'alias': self._escape_string(snap_data.get('alias', '')),
+                'relation_name': self._escape_string(snap_data.get('relation_name', '')),
+                'enabled': config.get('enabled', True),
+                'tags': str(config.get('tags', [])),
+                'materialized': self._escape_string(config.get('materialized', 'snapshot')),
+                'strategy': self._escape_string(config.get('strategy', '')),
+                'unique_key': self._escape_string(config.get('unique_key', '')),
+                'updated_at': self._escape_string(config.get('updated_at', '')),
+            }
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Snapshot', 'snap', snap_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting snapshot {snap_id}: {e}")
+        logger.info(f"Upserted {len(snapshots)} snapshot nodes")
+
+    def _upsert_tests(self, tests: Dict[str, Any]):
+        for test_id, test_data in tests.items():
+            config = test_data.get('config', {})
+            properties = {
+                'unique_id': self._escape_string(test_id),
+                'name': self._escape_string(test_data.get('name', '')),
+                'resource_type': self._escape_string(test_data.get('resource_type', '')),
+                'package_name': self._escape_string(test_data.get('package_name', '')),
+                'path': self._escape_string(test_data.get('path', '')),
+                'column_name': self._escape_string(test_data.get('column_name', '')),
+                'language': self._escape_string(test_data.get('language', 'sql')),
+                'enabled': config.get('enabled', True),
+                'tags': str(config.get('tags', [])),
+                'severity': self._escape_string(config.get('severity', 'ERROR')),
+            }
+            test_metadata = test_data.get('test_metadata', {})
+            if test_metadata:
+                properties.update({
+                    'test_name': self._escape_string(test_metadata.get('name', '')),
+                    'test_kwargs': json.dumps(test_metadata.get('kwargs', {})),
+                })
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Test', 't', test_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting test {test_id}: {e}")
+        logger.info(f"Upserted {len(tests)} test nodes")
+
+    def _upsert_macros(self, macros: Dict[str, Any]):
+        for macro_id, macro_data in macros.items():
+            properties = {
+                'unique_id': self._escape_string(macro_id),
+                'name': self._escape_string(macro_data.get('name', '')),
+                'resource_type': self._escape_string(macro_data.get('resource_type', '')),
+                'package_name': self._escape_string(macro_data.get('package_name', '')),
+                'path': self._escape_string(macro_data.get('path', '')),
+                'description': self._escape_string(macro_data.get('description', '')),
+                'arguments': json.dumps(macro_data.get('arguments', [])),
+            }
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Macro', 'mac', macro_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting macro {macro_id}: {e}")
+        logger.info(f"Upserted {len(macros)} macro nodes")
+
+    def _upsert_operations(self, operations: Dict[str, Any]):
+        for op_id, op_data in operations.items():
+            properties = {
+                'unique_id': self._escape_string(op_id),
+                'name': self._escape_string(op_data.get('name', '')),
+                'resource_type': self._escape_string(op_data.get('resource_type', '')),
+                'package_name': self._escape_string(op_data.get('package_name', '')),
+                'path': self._escape_string(op_data.get('path', '')),
+                'database': self._escape_string(op_data.get('database', '')),
+                'schema': self._escape_string(op_data.get('schema', '')),
+                'language': self._escape_string(op_data.get('language', 'sql')),
+            }
+            prop_strings = [f for f in (self._format_property_value(k, v) for k, v in properties.items()) if f is not None]
+            try:
+                self._upsert_node('Operation', 'o', op_id, prop_strings)
+            except Exception as e:
+                logger.error(f"Error upserting operation {op_id}: {e}")
+        logger.info(f"Upserted {len(operations)} operation nodes")
+
+    def _merge_dependencies(self, parent_map: Dict[str, List[str]], child_map: Dict[str, List[str]]):
+        count = 0
+        for child, parents in parent_map.items():
+            for parent in parents:
+                query = f"""
+                    MATCH (parent) WHERE parent.unique_id = '{self._escape_string(parent)}'
+                    MATCH (child) WHERE child.unique_id = '{self._escape_string(child)}'
+                    MERGE (child)-[:DEPENDS_ON]->(parent)
+                """
+                try:
+                    self.graph.query(query)
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Error merging dependency {child} -> {parent}: {e}")
+        logger.info(f"Merged {count} dependency relationships")
+
+    def _merge_ref_relationships(self, nodes: Dict[str, Any]):
+        count = 0
+        for node_id, node_data in nodes.items():
+            for ref in node_data.get('refs', []):
+                ref_name = ref.get('name') if isinstance(ref, dict) else ref
+                if ref_name:
+                    query = f"""
+                        MATCH (referencing) WHERE referencing.unique_id = '{self._escape_string(node_id)}'
+                        MATCH (referenced:Model) WHERE referenced.name = '{self._escape_string(ref_name)}'
+                        MERGE (referencing)-[:REFERENCES]->(referenced)
+                    """
+                    try:
+                        self.graph.query(query)
+                        count += 1
+                    except Exception as e:
+                        logger.error(f"Error merging reference {node_id} -> {ref_name}: {e}")
+        logger.info(f"Merged {count} REFERENCES relationships")
+
+    def _merge_source_relationships(self, nodes: Dict[str, Any]):
+        count = 0
+        for node_id, node_data in nodes.items():
+            for source in node_data.get('sources', []):
+                if len(source) >= 2:
+                    full_source_name = f"{source[0]}.{source[1]}"
+                    query = f"""
+                        MATCH (node) WHERE node.unique_id = '{self._escape_string(node_id)}'
+                        MATCH (source:Source) WHERE source.name = '{self._escape_string(full_source_name)}'
+                        MERGE (node)-[:DEPENDS_ON]->(source)
+                    """
+                    try:
+                        self.graph.query(query)
+                        count += 1
+                    except Exception as e:
+                        logger.error(f"Error merging source dependency {node_id} -> {full_source_name}: {e}")
+        logger.info(f"Merged {count} DEPENDS_ON relationships to sources")
+
+    def _merge_macro_relationships(self, nodes: Dict[str, Any]):
+        count = 0
+        for node_id, node_data in nodes.items():
+            for macro in node_data.get('depends_on', {}).get('macros', []):
+                query = f"""
+                    MATCH (node) WHERE node.unique_id = '{self._escape_string(node_id)}'
+                    MATCH (macro:Macro) WHERE macro.unique_id = '{self._escape_string(macro)}'
+                    MERGE (node)-[:USES_MACRO]->(macro)
+                """
+                try:
+                    self.graph.query(query)
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Error merging macro usage {node_id} -> {macro}: {e}")
+        logger.info(f"Merged {count} USES_MACRO relationships")
+
+    def _merge_test_relationships(self, tests: Dict[str, Any]):
+        count = 0
+        for test_id, test_data in tests.items():
+            attached_node = test_data.get('attached_node')
+            if attached_node:
+                query = f"""
+                    MATCH (test:Test) WHERE test.unique_id = '{self._escape_string(test_id)}'
+                    MATCH (node) WHERE node.unique_id = '{self._escape_string(attached_node)}'
+                    MERGE (test)-[:TESTS]->(node)
+                """
+                try:
+                    self.graph.query(query)
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Error merging test relationship {test_id} -> {attached_node}: {e}")
+        logger.info(f"Merged {count} TESTS relationships")
+
+    def incremental_update_from_files(self, old_manifest_path: str, new_manifest_path: str, catalog_path: str = None):
+        """Incrementally update the graph based on the diff between two manifest files."""
+        logger.info("Starting incremental FalkorDB update")
+
+        old_manifest_data, _ = self.load_manifest_data(old_manifest_path)
+        new_manifest_data, catalog_data = self.load_manifest_data(new_manifest_path, catalog_path)
+
+        added, changed, removed = self._diff_manifests(old_manifest_data, new_manifest_data)
+        logger.info(f"Diff: {len(added)} added, {len(changed)} changed, {len(removed)} removed")
+
+        if removed:
+            self._delete_nodes(removed)
+
+        if changed:
+            self._delete_outgoing_relationships(changed)
+
+        to_upsert = added | changed
+        if not to_upsert:
+            logger.info("Nothing to update")
+            return
+
+        new_nodes = new_manifest_data.get('nodes', {})
+        new_sources = new_manifest_data.get('sources', {})
+        new_macros = new_manifest_data.get('macros', {})
+        parent_map = new_manifest_data.get('parent_map', {})
+        child_map = new_manifest_data.get('child_map', {})
+        catalog_nodes = catalog_data.get('nodes', {})
+
+        models = {k: v for k, v in new_nodes.items() if k in to_upsert and v.get('resource_type') == 'model'}
+        tests = {k: v for k, v in new_nodes.items() if k in to_upsert and v.get('resource_type') == 'test'}
+        seeds = {k: v for k, v in new_nodes.items() if k in to_upsert and v.get('resource_type') == 'seed'}
+        snapshots = {k: v for k, v in new_nodes.items() if k in to_upsert and v.get('resource_type') == 'snapshot'}
+        operations = {k: v for k, v in new_nodes.items() if k in to_upsert and v.get('resource_type') == 'operation'}
+        sources = {k: v for k, v in new_sources.items() if k in to_upsert}
+        macros = {k: v for k, v in new_macros.items() if k in to_upsert}
+
+        self._upsert_models(models, catalog_nodes)
+        self._upsert_sources(sources)
+        self._upsert_seeds(seeds)
+        self._upsert_snapshots(snapshots)
+        self._upsert_tests(tests)
+        self._upsert_macros(macros)
+        self._upsert_operations(operations)
+
+        filtered_parent_map = {k: v for k, v in parent_map.items() if k in to_upsert}
+        self._merge_dependencies(filtered_parent_map, child_map)
+
+        all_upserted_nodes = {**models, **tests, **seeds, **snapshots, **operations}
+        self._merge_ref_relationships(all_upserted_nodes)
+        self._merge_source_relationships(all_upserted_nodes)
+        self._merge_macro_relationships(all_upserted_nodes)
+        self._merge_test_relationships(tests)
+
+        logger.info("Incremental update completed")
+
     def get_graph_stats(self):
         """Get statistics about the created graph"""
         try:
