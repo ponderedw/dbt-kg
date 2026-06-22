@@ -3,18 +3,18 @@ version: 2
 models:
   - name: student_retention_analysis
     description: >
-      Student retention rates and cohort analysis by program and semester.
+      Student retention rates and cohort analysis by program and quarter.
       Identifies when and why students are most likely to leave, enabling
       targeted retention interventions.
     columns:
-      - name: cohort_semester_id
-        description: Semester when the cohort first enrolled.
+      - name: cohort_quarter_id
+        description: Quarter when the cohort first enrolled.
       - name: department_id
         description: Major department of the cohort.
       - name: cohort_size
         description: Number of students who started in this cohort.
-      - name: retained_next_semester
-        description: Number still enrolled the following semester.
+      - name: retained_next_quarter
+        description: Number still enrolled the following quarter.
       - name: retention_rate
         description: Fraction retained (0.0–1.0).
       - name: avg_gpa_retained
@@ -22,24 +22,24 @@ models:
       - name: avg_gpa_departed
         description: Average GPA of students who departed.
 
-  - name: semester_enrollment_trends
+  - name: quarter_enrollment_trends
     description: >
-      Enrollment trend analysis broken down by semester, department and
+      Enrollment trend analysis broken down by quarter, department and
       student level. Highlights seasonal patterns and growth trajectories
       for capacity planning.
     columns:
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: department_id
         description: Foreign key to the academic department.
       - name: student_level
         description: "Class level: Freshman, Sophomore, Junior, Senior, or Graduate."
       - name: enrolled_students
-        description: Number of distinct students enrolled this semester.
+        description: Number of distinct students enrolled this quarter.
       - name: new_enrollments
         description: Students enrolling for the first time.
       - name: returning_enrollments
-        description: Students who were enrolled in the prior semester.
+        description: Students who were enrolled in the prior quarter.
       - name: yoy_change_pct
         description: Year-over-year percentage change in enrollment.
 
@@ -51,8 +51,8 @@ models:
     columns:
       - name: course_id
         description: Foreign key to the course.
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: students_assessed
         description: Number of students assessed against learning outcomes.
       - name: outcomes_met_rate
@@ -70,8 +70,8 @@ models:
     columns:
       - name: faculty_id
         description: Foreign key to the faculty member.
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: courses_taught
         description: Number of distinct courses taught.
       - name: avg_student_grade
@@ -81,12 +81,12 @@ models:
       - name: attendance_rate
         description: Average student attendance rate in instructor-led sessions.
       - name: effectiveness_percentile
-        description: Percentile rank among all instructors for this semester.
+        description: Percentile rank among all instructors for this quarter.
 
   - name: course_difficulty_calibration
     description: >
       Course difficulty ratings calibrated against actual student performance
-      data. Helps advisors set realistic expectations and identify courses
+      data. Helps school leaders set realistic expectations and identify courses
       that may need curriculum revision.
     columns:
       - name: course_id
@@ -105,13 +105,13 @@ models:
   - name: assignment_workload_analysis
     description: >
       Assignment workload distribution and time pressure analysis per course
-      and semester. Identifies courses with unusually high workload density
+      and quarter. Identifies courses with unusually high workload density
       or assignment clustering near deadlines.
     columns:
       - name: course_id
         description: Foreign key to the course.
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: total_assignments
         description: Total number of graded assignments in the course.
       - name: avg_points_per_assignment
@@ -126,17 +126,17 @@ models:
   - name: course_success_predictors
     description: >
       Predictive features and success probability scores for each
-      student-course combination. Enables advisors to identify students
-      at risk of failing a specific course before the semester ends.
+      student-course combination. Enables school leaders to identify students
+      at risk of failing a specific course before the quarter ends.
     columns:
       - name: student_id
         description: Foreign key to the student.
       - name: course_id
         description: Foreign key to the course.
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: prior_gpa
-        description: Student's GPA at the start of the semester.
+        description: Student's GPA at the start of the quarter.
       - name: prerequisite_completion_rate
         description: Fraction of course prerequisites completed with a passing grade.
       - name: attendance_rate_so_far
@@ -154,8 +154,8 @@ models:
     columns:
       - name: department_id
         description: Foreign key to the department being benchmarked.
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: department_avg_gpa
         description: Average GPA of students in the department.
       - name: institutional_avg_gpa

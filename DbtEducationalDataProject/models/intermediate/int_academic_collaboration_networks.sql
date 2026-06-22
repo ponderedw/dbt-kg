@@ -5,12 +5,12 @@ with student_course_connections as (
         e1.student_id as student_a,
         e2.student_id as student_b,
         e1.course_id,
-        e1.semester_id,
+        e1.quarter_id,
         c.course_code,
         c.course_name,
         c.difficulty_level,
         d.department_name,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year,
         s1.full_name as student_a_name,
         s2.full_name as student_b_name,
@@ -24,11 +24,11 @@ with student_course_connections as (
     from {{ ref('stg_enrollments') }} e1
     inner join {{ ref('stg_enrollments') }} e2 
         on e1.course_id = e2.course_id 
-        and e1.semester_id = e2.semester_id
+        and e1.quarter_id = e2.quarter_id
         and e1.student_id < e2.student_id  -- Avoid duplicates
     inner join {{ ref('stg_courses') }} c on e1.course_id = c.course_id
     inner join {{ ref('stg_departments') }} d on c.department_id = d.department_id
-    inner join {{ ref('stg_semesters') }} sem on e1.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e1.quarter_id = sem.quarter_id
     inner join {{ ref('stg_students') }} s1 on e1.student_id = s1.student_id
     inner join {{ ref('stg_students') }} s2 on e2.student_id = s2.student_id
     where e1.enrollment_status = 'Completed' and e2.enrollment_status = 'Completed'
@@ -41,7 +41,7 @@ student_collaboration_strength as (
         student_a_name,
         student_b_name,
         count(distinct course_id) as shared_courses,
-        count(distinct semester_id) as shared_semesters,
+        count(distinct quarter_id) as shared_quarters,
         count(distinct department_name) as shared_departments,
         avg(difficulty_level) as avg_shared_course_difficulty,
         avg(grade_difference) as avg_grade_difference,
@@ -100,7 +100,7 @@ faculty_collaboration_networks as (
         f1.department_name as faculty_a_dept,
         f2.department_name as faculty_b_dept,
         count(distinct cs1.course_id) as shared_teaching_opportunities,
-        count(distinct cs1.semester_id) as semesters_co_teaching,
+        count(distinct cs1.quarter_id) as quarters_co_teaching,
         count(distinct e.student_id) as shared_students,
         avg(e.grade_points) as avg_shared_student_performance,
         case when f1.department_id = f2.department_id then 1 else 0 end as same_department
@@ -108,11 +108,11 @@ faculty_collaboration_networks as (
     inner join {{ ref('stg_faculty') }} f2 on f1.faculty_id < f2.faculty_id
     inner join {{ ref('stg_class_sessions') }} cs1 on f1.faculty_id = cs1.faculty_id
     inner join {{ ref('stg_class_sessions') }} cs2 on f2.faculty_id = cs2.faculty_id
-        and cs1.semester_id = cs2.semester_id
+        and cs1.quarter_id = cs2.quarter_id
     inner join {{ ref('stg_enrollments') }} e on cs1.course_id = e.course_id 
-        and cs1.semester_id = e.semester_id
+        and cs1.quarter_id = e.quarter_id
     inner join {{ ref('stg_enrollments') }} e2 on cs2.course_id = e2.course_id 
-        and cs2.semester_id = e2.semester_id
+        and cs2.quarter_id = e2.quarter_id
         and e.student_id = e2.student_id  -- Same student in both courses
     group by 
         f1.faculty_id, f2.faculty_id, f1.faculty_name, f2.faculty_name,

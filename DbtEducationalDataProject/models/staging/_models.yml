@@ -29,8 +29,8 @@ models:
         description: Cumulative grade point average on a 4.0 scale.
       - name: major_id
         description: Foreign key to the department that is the student's declared major.
-      - name: advisor_id
-        description: Foreign key to the faculty member acting as academic advisor.
+      - name: school_leader_id
+        description: Foreign key to the faculty member acting as academic school leader.
       - name: address_id
         description: Foreign key to the student's address record.
       - name: age
@@ -93,7 +93,7 @@ models:
   - name: stg_enrollments
     description: >
       Staged student course enrollment records. Each row represents one student's
-      registration in one course section during one semester. Includes grade,
+      registration in one course section during one quarter. Includes grade,
       completion status and attendance rate.
     columns:
       - name: enrollment_id
@@ -102,8 +102,8 @@ models:
         description: Foreign key to the enrolled student.
       - name: course_id
         description: Foreign key to the course being taken.
-      - name: semester_id
-        description: Foreign key to the academic semester.
+      - name: quarter_id
+        description: Foreign key to the academic quarter.
       - name: section_number
         description: Section identifier when multiple sections of the same course are offered.
       - name: enrollment_date
@@ -147,25 +147,25 @@ models:
       - name: specialization
         description: Primary area of academic specialization or research focus.
 
-  - name: stg_semesters
+  - name: stg_quarters
     description: >
-      Staged academic semester definitions. Defines the date boundaries and
-      type of each semester. One row per semester.
+      Staged academic quarter definitions. Defines the date boundaries and
+      type of each quarter. One row per quarter.
     columns:
-      - name: semester_id
-        description: Unique surrogate identifier for a semester.
-      - name: semester_name
+      - name: quarter_id
+        description: Unique surrogate identifier for a quarter.
+      - name: quarter_name
         description: Human-readable name (e.g. Fall 2024, Spring 2025).
-      - name: semester_type
-        description: "Semester type: Fall, Spring, or Summer."
+      - name: quarter_type
+        description: "Quarter type: Fall, Spring, or Summer."
       - name: academic_year
-        description: Academic year the semester belongs to (e.g. 2024-2025).
+        description: Academic year the quarter belongs to (e.g. 2024-2025).
       - name: start_date
         description: First day of classes.
       - name: end_date
         description: Last day of classes.
       - name: is_current
-        description: Boolean flag; true for the semester currently in progress.
+        description: Boolean flag; true for the quarter currently in progress.
 
   - name: stg_assignments
     description: >
@@ -176,8 +176,8 @@ models:
         description: Unique surrogate identifier for an assignment.
       - name: course_id
         description: Foreign key to the course this assignment belongs to.
-      - name: semester_id
-        description: Foreign key to the semester when this assignment is due.
+      - name: quarter_id
+        description: Foreign key to the quarter when this assignment is due.
       - name: assignment_type
         description: "Category: homework, quiz, midterm, final, project, or participation."
       - name: title
@@ -220,8 +220,8 @@ models:
         description: Unique surrogate identifier for a class session.
       - name: course_id
         description: Foreign key to the course this session belongs to.
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: faculty_id
         description: Foreign key to the faculty member who led the session.
       - name: session_date
@@ -244,8 +244,8 @@ models:
         description: Unique surrogate identifier for a financial aid award.
       - name: student_id
         description: Foreign key to the student receiving aid.
-      - name: semester_id
-        description: Foreign key to the semester the aid applies to.
+      - name: quarter_id
+        description: Foreign key to the quarter the aid applies to.
       - name: aid_type
         description: "Aid category: grant, scholarship, loan, work-study, or fellowship."
       - name: aid_source
@@ -266,8 +266,8 @@ models:
         description: Unique surrogate identifier for a payment transaction.
       - name: student_id
         description: Foreign key to the student making the payment.
-      - name: semester_id
-        description: Foreign key to the semester the payment covers.
+      - name: quarter_id
+        description: Foreign key to the quarter the payment covers.
       - name: payment_date
         description: Date the payment was processed.
       - name: amount

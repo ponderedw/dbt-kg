@@ -4,10 +4,10 @@ with classroom_utilization as (
     select
         cs.room_id,
         cs.course_id,
-        cs.semester_id,
+        cs.quarter_id,
         c.course_code,
         c.credits,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year,
         count(distinct cs.session_date) as sessions_held,
         avg(cs.attendance_count) as avg_session_attendance,
@@ -17,17 +17,17 @@ with classroom_utilization as (
         extract(dow from cs.session_date) as day_of_week
     from {{ ref('stg_class_sessions') }} cs
     inner join {{ ref('stg_courses') }} c on cs.course_id = c.course_id
-    inner join {{ ref('stg_semesters') }} sem on cs.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on cs.quarter_id = sem.quarter_id
     group by 
-        cs.room_id, cs.course_id, cs.semester_id, c.course_code, c.credits,
-        sem.semester_name, sem.academic_year, cs.session_time, cs.session_date
+        cs.room_id, cs.course_id, cs.quarter_id, c.course_code, c.credits,
+        sem.quarter_name, sem.academic_year, cs.session_time, cs.session_date
 ),
 
 room_efficiency_metrics as (
     select
         room_id,
-        semester_id,
-        semester_name,
+        quarter_id,
+        quarter_name,
         count(distinct course_id) as courses_using_room,
         sum(sessions_held) as total_sessions_in_room,
         avg(avg_session_attendance) as room_avg_attendance,
@@ -36,7 +36,7 @@ room_efficiency_metrics as (
         count(distinct day_of_week) as days_per_week_used,
         round(avg(avg_session_attendance / nullif(max_session_attendance, 0)) * 100, 2) as avg_capacity_utilization
     from classroom_utilization
-    group by room_id, semester_id, semester_name
+    group by room_id, quarter_id, quarter_name
 ),
 
 faculty_resource_allocation as (
@@ -49,7 +49,7 @@ faculty_resource_allocation as (
         d.department_name,
         d.budget as department_budget,
         count(distinct cs.course_id) as courses_taught,
-        count(distinct cs.semester_id) as semesters_active,
+        count(distinct cs.quarter_id) as quarters_active,
         sum(c.credits) as total_credit_hours_taught,
         count(distinct cs.session_date) as total_class_sessions,
         avg(cs.attendance_count) as avg_class_size,
@@ -114,7 +114,7 @@ financial_resource_efficiency as (
 resource_optimization_analysis as (
     select
         rem.room_id,
-        rem.semester_name,
+        rem.quarter_name,
         rem.room_avg_attendance,
         rem.avg_capacity_utilization,
         rem.unique_time_slots_used,

@@ -8,32 +8,32 @@ models:
       financial standing used for collections, compliance and counseling.
     columns:
       - name: student_id
-        description: Unique student identifier; grain is one row per student per semester.
-      - name: semester_id
-        description: Foreign key to the semester.
+        description: Unique student identifier; grain is one row per student per quarter.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: total_tuition_charged
-        description: Total tuition and fees billed for the semester.
+        description: Total tuition and fees billed for the quarter.
       - name: total_aid_awarded
-        description: Total financial aid awarded for the semester.
+        description: Total financial aid awarded for the quarter.
       - name: total_payments_made
-        description: Total cash payments received for the semester.
+        description: Total cash payments received for the quarter.
       - name: outstanding_balance
         description: Remaining balance owed (charged minus aid and payments).
       - name: has_financial_hold
         description: True if the student has an unresolved financial hold.
       - name: aid_types_received
-        description: Comma-separated list of aid categories received this semester.
+        description: Comma-separated list of aid categories received this quarter.
       - name: net_cost
         description: Total tuition charged minus total aid awarded.
 
   - name: tuition_revenue_analysis
     description: >
-      Tuition revenue analysis broken down by semester, department and
+      Tuition revenue analysis broken down by quarter, department and
       payment method. Tracks gross revenue, refunds and net collected amounts
       to support financial forecasting.
     columns:
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: department_id
         description: Foreign key to the department (based on students' majors).
       - name: gross_tuition_billed
@@ -55,8 +55,8 @@ models:
       success. Compares outcomes between aided and non-aided student
       populations to evaluate aid programme effectiveness.
     columns:
-      - name: semester_id
-        description: Foreign key to the semester.
+      - name: quarter_id
+        description: Foreign key to the quarter.
       - name: aid_type
         description: Type of financial aid (grant, scholarship, loan, etc.).
       - name: aided_student_count
@@ -66,9 +66,9 @@ models:
       - name: avg_gpa_unaided
         description: Average GPA of students not receiving any aid.
       - name: retention_rate_aided
-        description: Semester-to-semester retention rate for aided students.
+        description: Quarter-to-quarter retention rate for aided students.
       - name: retention_rate_unaided
-        description: Semester-to-semester retention rate for unaided students.
+        description: Quarter-to-quarter retention rate for unaided students.
       - name: aid_impact_score
         description: Estimated lift in retention attributable to the aid programme.
 

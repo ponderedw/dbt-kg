@@ -44,7 +44,7 @@ academic_performance_kpis as (
         count(case when c.difficulty_level >= 4 then 1 end) as advanced_courses_offered
     from {{ ref('stg_enrollments') }} e
     inner join {{ ref('stg_courses') }} c on e.course_id = c.course_id
-    inner join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
 ),
 
 faculty_kpis as (
@@ -66,7 +66,7 @@ faculty_kpis as (
         ) as student_faculty_ratio
     from {{ ref('stg_faculty') }} f
     left join {{ ref('stg_class_sessions') }} cs on f.faculty_id = cs.faculty_id
-    left join {{ ref('stg_enrollments') }} e on cs.course_id = e.course_id and cs.semester_id = e.semester_id
+    left join {{ ref('stg_enrollments') }} e on cs.course_id = e.course_id and cs.quarter_id = e.quarter_id
     left join {{ ref('stg_students') }} s on e.student_id = s.student_id
 ),
 
@@ -103,24 +103,24 @@ operational_kpis as (
         count(distinct a.assignment_id) as total_assignments_given,
         round(avg(ap.avg_percentage_score), 1) as avg_assignment_performance,
         round(avg(ap.late_submission_rate), 1) as avg_late_submission_rate,
-        count(distinct sem.semester_id) as semesters_tracked
+        count(distinct sem.quarter_id) as quarters_tracked
     from {{ ref('stg_departments') }} d
     left join {{ ref('stg_class_sessions') }} cs on 1=1
     left join {{ ref('stg_assignments') }} a on 1=1
     left join {{ ref('int_assignment_performance') }} ap on a.assignment_id = ap.assignment_id
-    left join {{ ref('stg_semesters') }} sem on 1=1
+    left join {{ ref('stg_quarters') }} sem on 1=1
 ),
 
-semester_trends as (
+quarter_trends as (
     select
         current_date as report_date,
         'Trend Analysis' as kpi_category,
-        sem.semester_name as current_semester,
-        lag_sem.semester_name as previous_semester,
-        count(distinct e.student_id) as current_semester_students,
-        lag(count(distinct e.student_id)) over (order by sem.start_date) as previous_semester_students,
-        round(avg(e.grade_points), 2) as current_semester_gpa,
-        lag(round(avg(e.grade_points), 2)) over (order by sem.start_date) as previous_semester_gpa,
+        sem.quarter_name as current_quarter,
+        lag_sem.quarter_name as previous_quarter,
+        count(distinct e.student_id) as current_quarter_students,
+        lag(count(distinct e.student_id)) over (order by sem.start_date) as previous_quarter_students,
+        round(avg(e.grade_points), 2) as current_quarter_gpa,
+        lag(round(avg(e.grade_points), 2)) over (order by sem.start_date) as previous_quarter_gpa,
         round(
             (count(distinct e.student_id) - lag(count(distinct e.student_id)) over (order by sem.start_date)) * 100.0 /
             nullif(lag(count(distinct e.student_id)) over (order by sem.start_date), 0), 2
@@ -128,10 +128,10 @@ semester_trends as (
         round(
             (round(avg(e.grade_points), 2) - lag(round(avg(e.grade_points), 2)) over (order by sem.start_date)), 2
         ) as gpa_change
-    from {{ ref('stg_semesters') }} sem
-    left join {{ ref('stg_semesters') }} lag_sem on lag_sem.semester_id = lag(sem.semester_id) over (order by sem.start_date)
-    left join {{ ref('stg_enrollments') }} e on sem.semester_id = e.semester_id
-    group by sem.semester_id, sem.semester_name, sem.start_date, lag_sem.semester_name
+    from {{ ref('stg_quarters') }} sem
+    left join {{ ref('stg_quarters') }} lag_sem on lag_sem.quarter_id = lag(sem.quarter_id) over (order by sem.start_date)
+    left join {{ ref('stg_enrollments') }} e on sem.quarter_id = e.quarter_id
+    group by sem.quarter_id, sem.quarter_name, sem.start_date, lag_sem.quarter_name
     order by sem.start_date desc
     limit 1
 ),

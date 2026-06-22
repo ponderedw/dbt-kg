@@ -4,7 +4,7 @@ with source_data as (
     select
         assignment_id,
         course_id,
-        semester_id,
+        quarter_id,
         assignment_name,
         assignment_type,
         due_date,

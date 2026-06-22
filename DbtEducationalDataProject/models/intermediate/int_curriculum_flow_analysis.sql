@@ -9,7 +9,7 @@ with course_sequence_data as (
         c.difficulty_level,
         c.prerequisite_course_id,
         prereq.course_code as prerequisite_code,
-        e.semester_id,
+        e.quarter_id,
         sem.start_date,
         e.grade_points,
         e.grade_category,
@@ -17,7 +17,7 @@ with course_sequence_data as (
     from {{ ref('stg_enrollments') }} e
     inner join {{ ref('stg_courses') }} c on e.course_id = c.course_id
     left join {{ ref('stg_courses') }} prereq on c.prerequisite_course_id = prereq.course_id
-    inner join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     where e.enrollment_status = 'Completed'
 ),
 

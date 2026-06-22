@@ -2,10 +2,10 @@
 
 with institutional_metrics as (
     select
-        sem.semester_id,
-        sem.semester_name,
+        sem.quarter_id,
+        sem.quarter_name,
         sem.academic_year,
-        sem.semester_type,
+        sem.quarter_type,
         -- Enrollment metrics
         count(distinct e.student_id) as unique_students_enrolled,
         count(distinct e.enrollment_id) as total_course_enrollments,
@@ -37,30 +37,30 @@ with institutional_metrics as (
         round(count(distinct e.enrollment_id)::numeric / nullif(count(distinct f.faculty_id), 0), 2) as enrollments_per_faculty,
         round(count(distinct e.student_id)::numeric / nullif(count(distinct f.faculty_id), 0), 2) as students_per_faculty,
         round(sum(tp.amount) / nullif(count(distinct e.student_id), 0), 2) as revenue_per_student
-    from {{ ref('stg_semesters') }} sem
-    left join {{ ref('stg_enrollments') }} e on sem.semester_id = e.semester_id
+    from {{ ref('stg_quarters') }} sem
+    left join {{ ref('stg_enrollments') }} e on sem.quarter_id = e.quarter_id
     left join {{ ref('stg_courses') }} c on e.course_id = c.course_id
     left join {{ ref('stg_students') }} s on e.student_id = s.student_id
-    left join {{ ref('stg_class_sessions') }} cs on c.course_id = cs.course_id and sem.semester_id = cs.semester_id
+    left join {{ ref('stg_class_sessions') }} cs on c.course_id = cs.course_id and sem.quarter_id = cs.quarter_id
     left join {{ ref('stg_faculty') }} f on cs.faculty_id = f.faculty_id
-    left join {{ ref('stg_tuition_payments') }} tp on s.student_id = tp.student_id and sem.semester_id = tp.semester_id
+    left join {{ ref('stg_tuition_payments') }} tp on s.student_id = tp.student_id and sem.quarter_id = tp.quarter_id
     left join {{ ref('stg_financial_aid') }} fa on s.student_id = fa.student_id
-    group by sem.semester_id, sem.semester_name, sem.academic_year, sem.semester_type
+    group by sem.quarter_id, sem.quarter_name, sem.academic_year, sem.quarter_type
 ),
 
 performance_trends as (
     select
         im.*,
-        lag(institutional_avg_gpa) over (order by semester_id) as prev_semester_gpa,
-        lag(institutional_pass_rate) over (order by semester_id) as prev_semester_pass_rate,
-        lag(unique_students_enrolled) over (order by semester_id) as prev_semester_enrollment,
-        lag(total_tuition_revenue) over (order by semester_id) as prev_semester_revenue,
+        lag(institutional_avg_gpa) over (order by quarter_id) as prev_quarter_gpa,
+        lag(institutional_pass_rate) over (order by quarter_id) as prev_quarter_pass_rate,
+        lag(unique_students_enrolled) over (order by quarter_id) as prev_quarter_enrollment,
+        lag(total_tuition_revenue) over (order by quarter_id) as prev_quarter_revenue,
         
         -- Calculate trends
-        institutional_avg_gpa - lag(institutional_avg_gpa) over (order by semester_id) as gpa_trend,
-        institutional_pass_rate - lag(institutional_pass_rate) over (order by semester_id) as pass_rate_trend,
-        unique_students_enrolled - lag(unique_students_enrolled) over (order by semester_id) as enrollment_trend,
-        total_tuition_revenue - lag(total_tuition_revenue) over (order by semester_id) as revenue_trend,
+        institutional_avg_gpa - lag(institutional_avg_gpa) over (order by quarter_id) as gpa_trend,
+        institutional_pass_rate - lag(institutional_pass_rate) over (order by quarter_id) as pass_rate_trend,
+        unique_students_enrolled - lag(unique_students_enrolled) over (order by quarter_id) as enrollment_trend,
+        total_tuition_revenue - lag(total_tuition_revenue) over (order by quarter_id) as revenue_trend,
         
         -- Calculate percentile rankings
         percent_rank() over (order by institutional_avg_gpa) as gpa_percentile,
@@ -215,4 +215,4 @@ strategic_recommendations as (
 )
 
 select * from strategic_recommendations
-order by semester_id desc
+order by quarter_id desc

@@ -2,10 +2,10 @@
 
 with revenue_streams as (
     select
-        sem.semester_id,
-        sem.semester_name,
+        sem.quarter_id,
+        sem.quarter_name,
         sem.academic_year,
-        sem.semester_type,
+        sem.quarter_type,
         d.department_id,
         d.department_name,
         d.budget as department_budget,
@@ -19,16 +19,16 @@ with revenue_streams as (
         avg(tp.amount) as avg_tuition_per_student,
         sum(f.salary) as faculty_salary_costs,
         count(distinct f.faculty_id) as faculty_count
-    from {{ ref('stg_semesters') }} sem
-    left join {{ ref('stg_enrollments') }} e on sem.semester_id = e.semester_id
+    from {{ ref('stg_quarters') }} sem
+    left join {{ ref('stg_enrollments') }} e on sem.quarter_id = e.quarter_id
     left join {{ ref('stg_courses') }} c on e.course_id = c.course_id
     left join {{ ref('stg_departments') }} d on c.department_id = d.department_id
-    left join {{ ref('stg_tuition_payments') }} tp on sem.semester_id = tp.semester_id and e.student_id = tp.student_id
+    left join {{ ref('stg_tuition_payments') }} tp on sem.quarter_id = tp.quarter_id and e.student_id = tp.student_id
     left join {{ ref('stg_financial_aid') }} fa on e.student_id = fa.student_id
-    left join {{ ref('stg_class_sessions') }} cs on c.course_id = cs.course_id and sem.semester_id = cs.semester_id
+    left join {{ ref('stg_class_sessions') }} cs on c.course_id = cs.course_id and sem.quarter_id = cs.quarter_id
     left join {{ ref('stg_faculty') }} f on cs.faculty_id = f.faculty_id
     group by 
-        sem.semester_id, sem.semester_name, sem.academic_year, sem.semester_type,
+        sem.quarter_id, sem.quarter_name, sem.academic_year, sem.quarter_type,
         d.department_id, d.department_name, d.budget
 ),
 

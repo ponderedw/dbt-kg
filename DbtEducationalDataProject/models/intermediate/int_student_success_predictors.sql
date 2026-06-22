@@ -9,9 +9,9 @@ with student_baseline_metrics as (
         s.years_enrolled,
         s.academic_standing,
         d.department_name,
-        -- Early academic indicators (first semester performance)
-        first_value(e.grade_points) over (partition by s.student_id order by sem.start_date) as first_semester_gpa,
-        first_value(e.attendance_percentage) over (partition by s.student_id order by sem.start_date) as first_semester_attendance,
+        -- Early academic indicators (first quarter performance)
+        first_value(e.grade_points) over (partition by s.student_id order by sem.start_date) as first_quarter_gpa,
+        first_value(e.attendance_percentage) over (partition by s.student_id order by sem.start_date) as first_quarter_attendance,
         first_value(c.difficulty_level) over (partition by s.student_id order by sem.start_date) as first_course_difficulty,
         -- Financial indicators
         fa.total_aid_received,
@@ -29,7 +29,7 @@ with student_baseline_metrics as (
     left join {{ ref('stg_departments') }} d on s.major_id = d.department_id
     left join {{ ref('stg_enrollments') }} e on s.student_id = e.student_id
     left join {{ ref('stg_courses') }} c on e.course_id = c.course_id
-    left join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    left join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     left join (
         select 
             student_id,
@@ -64,8 +64,8 @@ predictive_features as (
     select
         sbm.*,
         -- Academic readiness indicators
-        case when first_semester_gpa >= 3.5 then 1 else 0 end as strong_academic_start,
-        case when first_semester_attendance >= 90 then 1 else 0 end as strong_engagement_start,
+        case when first_quarter_gpa >= 3.5 then 1 else 0 end as strong_academic_start,
+        case when first_quarter_attendance >= 90 then 1 else 0 end as strong_engagement_start,
         case when first_course_difficulty <= 2 then 1 else 0 end as appropriate_starting_difficulty,
         
         -- Risk factors
@@ -84,7 +84,7 @@ predictive_features as (
         -- Calculated metrics
         round(total_credits_earned::numeric / nullif(total_credits_attempted, 0) * 100, 2) as completion_rate,
         round(total_credits_earned::numeric / nullif(years_enrolled, 0), 2) as credits_per_year,
-        gpa - first_semester_gpa as gpa_trajectory,
+        gpa - first_quarter_gpa as gpa_trajectory,
         case
             when s.student_status = 'graduated' then 1
             when s.student_status = 'active' and s.gpa >= 2.0 then null  -- Still in progress
@@ -166,7 +166,7 @@ intervention_recommendations as (
             when overall_risk_category in ('Very High Risk', 'High Risk') and primary_risk_factor = 'Course Completion Issues' then
                 'Academic planning review, prerequisite assessment, course load reduction'
             when overall_risk_category = 'Moderate Risk' then
-                'Regular check-ins with advisor, peer tutoring, study skill workshops'
+                'Regular check-ins with school leader, peer tutoring, study skill workshops'
             when overall_risk_category = 'Low Risk' and primary_success_factor = 'Academic Excellence' then
                 'Honors program recruitment, research opportunities, leadership roles'
             else 'Standard academic support services'

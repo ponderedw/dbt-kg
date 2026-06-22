@@ -2,10 +2,10 @@
 
 with assignment_workload as (
     select
-        sem.semester_id,
-        sem.semester_name,
+        sem.quarter_id,
+        sem.quarter_name,
         sem.academic_year,
-        sem.semester_type,
+        sem.quarter_type,
         c.course_id,
         c.course_code,
         c.course_name,
@@ -29,19 +29,19 @@ with assignment_workload as (
             when extract(dow from a.due_date) in (0, 6) then 'Weekend'
             else 'Weekday'
         end as due_day_type
-    from {{ ref('stg_semesters') }} sem
-    inner join {{ ref('stg_assignments') }} a on sem.semester_id = a.semester_id
+    from {{ ref('stg_quarters') }} sem
+    inner join {{ ref('stg_assignments') }} a on sem.quarter_id = a.quarter_id
     inner join {{ ref('stg_courses') }} c on a.course_id = c.course_id
     inner join {{ ref('stg_departments') }} d on c.department_id = d.department_id
     left join {{ ref('int_assignment_performance') }} ap on a.assignment_id = ap.assignment_id
 ),
 
-semester_workload_analysis as (
+quarter_workload_analysis as (
     select
-        semester_id,
-        semester_name,
+        quarter_id,
+        quarter_name,
         academic_year,
-        semester_type,
+        quarter_type,
         count(distinct assignment_id) as total_assignments,
         count(distinct course_id) as courses_with_assignments,
         sum(max_points) as total_possible_points,
@@ -53,10 +53,10 @@ semester_workload_analysis as (
         count(case when assignment_category = 'Homework' then 1 end) as homework_count,
         count(case when assignment_category = 'Quiz' then 1 end) as quiz_count,
         count(case when due_day_type = 'Weekend' then 1 end) as weekend_due_assignments,
-        avg(avg_percentage_score) as semester_avg_score,
-        avg(late_submission_rate) as semester_late_rate
+        avg(avg_percentage_score) as quarter_avg_score,
+        avg(late_submission_rate) as quarter_late_rate
     from assignment_workload
-    group by semester_id, semester_name, academic_year, semester_type
+    group by quarter_id, quarter_name, academic_year, quarter_type
 ),
 
 course_workload_analysis as (
@@ -84,8 +84,8 @@ course_workload_analysis as (
 
 weekly_workload_distribution as (
     select
-        semester_id,
-        semester_name,
+        quarter_id,
+        quarter_name,
         due_week,
         count(distinct assignment_id) as assignments_due_this_week,
         sum(max_points) as total_points_due_this_week,
@@ -93,7 +93,7 @@ weekly_workload_distribution as (
         avg(weight_percentage) as avg_weight_this_week
     from assignment_workload
     where due_week is not null
-    group by semester_id, semester_name, due_week
+    group by quarter_id, quarter_name, due_week
 ),
 
 workload_intensity as (
@@ -111,21 +111,21 @@ workload_intensity as (
             when swa.total_assignments >= 50 then 'Moderate Workload'
             when swa.total_assignments >= 25 then 'Light Workload'
             else 'Very Light Workload'
-        end as semester_workload_category,
+        end as quarter_workload_category,
         case
             when www.max_weekly_assignments >= 15 then 'Overwhelming Weeks'
             when www.max_weekly_assignments >= 10 then 'Heavy Weeks'
             when www.max_weekly_assignments >= 7 then 'Busy Weeks'
             else 'Manageable Weeks'
         end as peak_week_intensity,
-        round(swa.total_assignments::numeric / 16, 2) as avg_assignments_per_week,  -- Assuming 16-week semester
+        round(swa.total_assignments::numeric / 16, 2) as avg_assignments_per_week,  -- Assuming 16-week quarter
         case
-            when swa.semester_late_rate >= 25 then 'High Stress Semester'
-            when swa.semester_late_rate >= 15 then 'Moderate Stress Semester'
-            when swa.semester_late_rate >= 10 then 'Low Stress Semester'
-            else 'Well-Managed Semester'
+            when swa.quarter_late_rate >= 25 then 'High Stress Quarter'
+            when swa.quarter_late_rate >= 15 then 'Moderate Stress Quarter'
+            when swa.quarter_late_rate >= 10 then 'Low Stress Quarter'
+            else 'Well-Managed Quarter'
         end as stress_indicator
-    from semester_workload_analysis swa
+    from quarter_workload_analysis swa
     left join (
         select
             course_id,
@@ -134,16 +134,16 @@ workload_intensity as (
             avg(points_per_credit) as points_per_credit
         from course_workload_analysis
         group by course_id
-    ) cwa on 1=1  -- Cross join for semester-level aggregation
+    ) cwa on 1=1  -- Cross join for quarter-level aggregation
     left join (
         select
-            semester_id,
+            quarter_id,
             max(assignments_due_this_week) as max_weekly_assignments,
             max(total_points_due_this_week) as max_weekly_points,
             avg(assignments_due_this_week) as avg_weekly_assignments
         from weekly_workload_distribution
-        group by semester_id
-    ) www on swa.semester_id = www.semester_id
+        group by quarter_id
+    ) www on swa.quarter_id = www.quarter_id
 )
 
 select * from workload_intensity

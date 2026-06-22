@@ -19,8 +19,8 @@ with course_student_data as (
         s.academic_standing,
         s.age,
         s.years_enrolled,
-        sem.semester_name,
-        sem.semester_type,
+        sem.quarter_name,
+        sem.quarter_type,
         ap.total_submissions,
         ap.avg_percentage_score as avg_assignment_score,
         ap.late_submission_rate,
@@ -31,7 +31,7 @@ with course_student_data as (
     inner join {{ ref('stg_enrollments') }} e on c.course_id = e.course_id
     inner join {{ ref('stg_students') }} s on e.student_id = s.student_id
     inner join {{ ref('stg_departments') }} d on c.department_id = d.department_id
-    inner join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     left join (
         select 
             course_id,
@@ -67,9 +67,9 @@ success_factors as (
         count(case when strong_academic_record = 1 then 1 end) as strong_students_total,
         count(case when good_attendance = 1 and successful_completion = 1 then 1 end) as good_attendance_successful,
         count(case when good_attendance = 1 then 1 end) as good_attendance_total,
-        avg(case when semester_type = 'Fall' then grade_points end) as fall_avg_performance,
-        avg(case when semester_type = 'Spring' then grade_points end) as spring_avg_performance,
-        avg(case when semester_type = 'Summer' then grade_points end) as summer_avg_performance
+        avg(case when quarter_type = 'Fall' then grade_points end) as fall_avg_performance,
+        avg(case when quarter_type = 'Spring' then grade_points end) as spring_avg_performance,
+        avg(case when quarter_type = 'Summer' then grade_points end) as summer_avg_performance
     from course_student_data
     group by 
         course_id, course_code, course_name, difficulty_level, 

@@ -11,7 +11,7 @@ with faculty_dashboard as (
         f.department_name,
         f.department_code,
         f.unique_courses_taught,
-        f.semesters_active,
+        f.quarters_active,
         f.total_class_sessions,
         f.total_students_taught,
         f.avg_class_attendance,
@@ -45,7 +45,7 @@ with faculty_dashboard as (
             when f.years_of_service >= 5 then 'Mid-Career Faculty'
             else 'Junior Faculty'
         end as career_stage,
-        round(f.total_students_taught::numeric / nullif(f.semesters_active, 0), 2) as avg_students_per_semester
+        round(f.total_students_taught::numeric / nullif(f.quarters_active, 0), 2) as avg_students_per_quarter
     from {{ ref('int_faculty_teaching_load') }} f
     left join {{ ref('int_department_analytics') }} da on f.department_id = da.department_id
 )

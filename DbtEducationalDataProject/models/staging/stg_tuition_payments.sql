@@ -4,7 +4,7 @@ with source_data as (
     select
         payment_id,
         student_id,
-        semester_id,
+        quarter_id,
         amount,
         payment_date,
         payment_method,

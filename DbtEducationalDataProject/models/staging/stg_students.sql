@@ -13,7 +13,7 @@ with source_data as (
         student_status,
         gpa,
         major_id,
-        advisor_id,
+        school_leader_id,
         address_id,
         extract(year from age(current_date, date_of_birth)) as age,
         extract(year from age(current_date, enrollment_date)) as years_enrolled,

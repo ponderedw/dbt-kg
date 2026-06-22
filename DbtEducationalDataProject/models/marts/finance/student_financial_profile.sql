@@ -18,7 +18,7 @@ with student_finances as (
         fa.support_level,
         fa.disbursement_period,
         tp.payment_id,
-        tp.semester_id,
+        tp.quarter_id,
         tp.amount as payment_amount,
         tp.payment_date,
         tp.payment_method_category,
@@ -26,13 +26,13 @@ with student_finances as (
         tp.total_payment,
         tp.payment_timeliness,
         tp.payment_size_category,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year as payment_academic_year
     from {{ ref('stg_students') }} s
     left join {{ ref('stg_departments') }} d on s.major_id = d.department_id
     left join {{ ref('stg_financial_aid') }} fa on s.student_id = fa.student_id
     left join {{ ref('stg_tuition_payments') }} tp on s.student_id = tp.student_id
-    left join {{ ref('stg_semesters') }} sem on tp.semester_id = sem.semester_id
+    left join {{ ref('stg_quarters') }} sem on tp.quarter_id = sem.quarter_id
 ),
 
 financial_summary as (

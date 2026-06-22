@@ -1,6 +1,6 @@
 {{ config(materialized='table') }}
 
-with current_semester_performance as (
+with current_quarter_performance as (
     select
         s.student_id,
         s.full_name,
@@ -10,7 +10,7 @@ with current_semester_performance as (
         s.years_enrolled,
         d.department_name,
         count(distinct e.enrollment_id) as current_enrollments,
-        avg(e.grade_points) as current_semester_gpa,
+        avg(e.grade_points) as current_quarter_gpa,
         avg(e.attendance_percentage) as current_attendance,
         count(case when e.grade_points < 2.0 then 1 end) as failing_courses,
         count(case when e.attendance_percentage < 70 then 1 end) as low_attendance_courses,
@@ -21,7 +21,7 @@ with current_semester_performance as (
     inner join {{ ref('stg_departments') }} d on s.major_id = d.department_id
     left join {{ ref('stg_enrollments') }} e on s.student_id = e.student_id
     left join {{ ref('stg_courses') }} c on e.course_id = c.course_id
-    left join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    left join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     where sem.is_current = true 
       and s.student_status = 'active'
       and e.enrollment_status in ('In Progress', 'Completed')
@@ -33,17 +33,17 @@ with current_semester_performance as (
 historical_patterns as (
     select
         student_id,
-        count(distinct semester_id) as total_semesters,
+        count(distinct quarter_id) as total_quarters,
         avg(grade_points) as historical_avg_gpa,
         count(case when grade_points < 2.0 then 1 end) as total_failed_courses,
         count(case when enrollment_status = 'Withdrawn' then 1 end) as total_withdrawals,
         min(grade_points) as worst_historical_grade,
         stddev(grade_points) as grade_consistency,
-        lag(avg(grade_points)) over (partition by student_id order by semester_id desc) as previous_semester_gpa
+        lag(avg(grade_points)) over (partition by student_id order by quarter_id desc) as previous_quarter_gpa
     from {{ ref('stg_enrollments') }} e
-    inner join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     where sem.is_current = false
-    group by student_id, semester_id
+    group by student_id, quarter_id
 ),
 
 assignment_performance_indicators as (
@@ -58,9 +58,9 @@ assignment_performance_indicators as (
             nullif(count(distinct asub.assignment_id), 0), 2
         ) as late_submission_rate
     from {{ ref('stg_enrollments') }} e
-    inner join {{ ref('stg_assignments') }} a on e.course_id = a.course_id and e.semester_id = a.semester_id
+    inner join {{ ref('stg_assignments') }} a on e.course_id = a.course_id and e.quarter_id = a.quarter_id
     inner join {{ ref('stg_assignment_submissions') }} asub on a.assignment_id = asub.assignment_id and e.student_id = asub.student_id
-    inner join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     where sem.is_current = true
     group by e.student_id
 ),
@@ -82,7 +82,7 @@ early_warning_indicators as (
         csp.email,
         csp.department_name,
         csp.cumulative_gpa,
-        csp.current_semester_gpa,
+        csp.current_quarter_gpa,
         csp.current_attendance,
         csp.failing_courses,
         csp.low_attendance_courses,
@@ -91,7 +91,7 @@ early_warning_indicators as (
         hp.total_failed_courses,
         hp.total_withdrawals,
         hp.grade_consistency,
-        hp.previous_semester_gpa,
+        hp.previous_quarter_gpa,
         api.avg_assignment_percentage,
         api.late_submission_rate,
         api.poor_assignment_scores,
@@ -100,10 +100,10 @@ early_warning_indicators as (
         fsi.poor_payment_history,
         
         -- Academic warning flags
-        case when csp.current_semester_gpa < 2.0 then 1 else 0 end as academic_failure_flag,
+        case when csp.current_quarter_gpa < 2.0 then 1 else 0 end as academic_failure_flag,
         case when csp.current_attendance < 75 then 1 else 0 end as attendance_warning_flag,
         case when csp.failing_courses >= 2 then 1 else 0 end as multiple_failures_flag,
-        case when csp.current_semester_gpa < csp.cumulative_gpa - 0.5 then 1 else 0 end as declining_performance_flag,
+        case when csp.current_quarter_gpa < csp.cumulative_gpa - 0.5 then 1 else 0 end as declining_performance_flag,
         case when api.late_submission_rate > 30 then 1 else 0 end as assignment_issues_flag,
         
         -- Engagement warning flags
@@ -117,7 +117,7 @@ early_warning_indicators as (
         -- Historical pattern flags
         case when hp.total_failed_courses >= 3 then 1 else 0 end as chronic_failure_flag,
         case when hp.total_withdrawals >= 2 then 1 else 0 end as withdrawal_pattern_flag
-    from current_semester_performance csp
+    from current_quarter_performance csp
     left join (
         select 
             student_id,
@@ -125,7 +125,7 @@ early_warning_indicators as (
             sum(total_failed_courses) as total_failed_courses,
             sum(total_withdrawals) as total_withdrawals,
             avg(grade_consistency) as grade_consistency,
-            max(previous_semester_gpa) as previous_semester_gpa
+            max(previous_quarter_gpa) as previous_quarter_gpa
         from historical_patterns
         group by student_id
     ) hp on csp.student_id = hp.student_id
@@ -180,11 +180,11 @@ intervention_planning as (
         rs.*,
         -- Immediate interventions
         case
-            when risk_level = 'Critical Risk' then 'URGENT: Schedule immediate meeting with academic advisor, dean, and counselor'
+            when risk_level = 'Critical Risk' then 'URGENT: Schedule immediate meeting with academic school leader, dean, and counselor'
             when risk_level = 'High Risk' and primary_risk_category = 'Academic Crisis' then 'Schedule tutoring, reduce course load, academic probation review'
             when risk_level = 'High Risk' and primary_risk_category = 'Engagement Issues' then 'Mandatory attendance tracking, peer mentorship program'
             when risk_level = 'High Risk' and primary_risk_category = 'Financial Difficulties' then 'Financial aid counseling, emergency assistance application'
-            when risk_level = 'Moderate Risk' then 'Proactive check-in with advisor, study skills workshop'
+            when risk_level = 'Moderate Risk' then 'Proactive check-in with school leader, study skills workshop'
             when risk_level = 'Low Risk' then 'Monitor progress, optional support services'
             else 'Standard academic support'
         end as recommended_immediate_intervention,
@@ -195,7 +195,7 @@ intervention_planning as (
             when risk_level = 'High Risk' then 'Weekly check-ins for 1 month'
             when risk_level = 'Moderate Risk' then 'Bi-weekly check-ins'
             when risk_level = 'Low Risk' then 'Monthly check-ins'
-            else 'Semester check-ins'
+            else 'Quarter check-ins'
         end as follow_up_schedule,
         
         -- Success probability
@@ -221,4 +221,4 @@ intervention_planning as (
 
 select * from intervention_planning
 where risk_level != 'No Risk'
-order by alert_priority asc, total_warning_flags desc, current_semester_gpa asc
+order by alert_priority asc, total_warning_flags desc, current_quarter_gpa asc

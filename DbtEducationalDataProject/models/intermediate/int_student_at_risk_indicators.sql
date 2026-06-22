@@ -78,7 +78,7 @@ intervention_recommendations as (
     select
         *,
         case
-            when risk_level = 'Critical Risk' then 'Immediate intervention required - Academic advisor meeting, counseling referral, financial aid review'
+            when risk_level = 'Critical Risk' then 'Immediate intervention required - Academic school leader meeting, counseling referral, financial aid review'
             when risk_level = 'High Risk' and primary_risk_category = 'Academic Crisis' then 'Academic support - Tutoring, study skills workshop, course load reduction'
             when risk_level = 'High Risk' and primary_risk_category = 'Financial Crisis' then 'Financial counseling - Payment plan setup, additional aid application assistance'
             when risk_level = 'High Risk' and primary_risk_category = 'Engagement Issues' then 'Engagement support - Attendance monitoring, study group placement, mentor assignment'

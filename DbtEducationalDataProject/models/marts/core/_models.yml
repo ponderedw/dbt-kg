@@ -31,7 +31,7 @@ models:
       - name: major_code
         description: Short code of the major department.
       - name: total_enrollments
-        description: Total course enrollments across all semesters.
+        description: Total course enrollments across all quarters.
       - name: total_credits_attempted
         description: Total credit hours attempted.
       - name: total_credits_earned
@@ -55,7 +55,7 @@ models:
     description: >
       Enriched course catalog combining the base course data with aggregated
       performance metrics (average grade, pass rate, typical enrollment) across
-      all historical semesters. Used by advisors and students for course selection.
+      all historical quarters. Used by school leaders and students for course selection.
     columns:
       - name: course_id
         description: Unique course identifier.
@@ -74,9 +74,9 @@ models:
       - name: avg_grade_points
         description: Historical average grade points across all offerings.
       - name: avg_enrollment
-        description: Average number of students enrolled per semester offering.
+        description: Average number of students enrolled per quarter offering.
       - name: times_offered
-        description: Total number of semesters the course has been offered.
+        description: Total number of quarters the course has been offered.
 
   - name: department_efficiency_report
     description: >
@@ -162,9 +162,9 @@ models:
       - name: overall_gpa
         description: Institution-wide average GPA.
       - name: overall_retention_rate
-        description: Fraction of students returning from the prior semester.
-      - name: total_credit_hours_this_semester
-        description: Credit hours enrolled this semester.
+        description: Fraction of students returning from the prior quarter.
+      - name: total_credit_hours_this_quarter
+        description: Credit hours enrolled this quarter.
       - name: avg_faculty_load
         description: Average sections per full-time faculty member.
       - name: budget_utilisation_pct
@@ -177,7 +177,7 @@ models:
       and student success metrics into a single consolidated view.
     columns:
       - name: kpi_period
-        description: Academic year or semester the KPIs apply to.
+        description: Academic year or quarter the KPIs apply to.
       - name: enrollment_growth_pct
         description: Year-over-year change in total enrollment.
       - name: revenue_per_student
@@ -206,10 +206,10 @@ models:
       - name: low_gpa_flag
         description: True if GPA is below the minimum satisfactory academic progress threshold.
       - name: low_attendance_flag
-        description: True if current semester attendance is below 75%.
+        description: True if current quarter attendance is below 75%.
       - name: failing_course_count
         description: Number of courses currently at failing grade.
-      - name: financial_hardship_flag
+      - name: assessment_score_flag
         description: True if the student has an unresolved financial hold.
       - name: recommended_intervention
         description: Suggested intervention type (academic advising, financial counseling, tutoring, etc.).

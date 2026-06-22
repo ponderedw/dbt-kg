@@ -126,7 +126,7 @@ These questions use keyword matching against model descriptions. Faster and more
 These questions find models by *meaning* rather than exact name. The agent uses vector similarity search over embeddings stored on graph nodes — no Cypher required.
 
 **Business concept discovery**
-- "Which models deal with student financial hardship or outstanding balances?"
+- "Which models deal with student assessment score or outstanding balances?"
 - "Find models related to grade inflation analysis."
 - "Which models track early warning signals for students at academic risk?"
 - "Show me everything related to faculty workload and teaching effectiveness."

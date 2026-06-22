@@ -31,7 +31,7 @@ on-run-start: |-
         student_status TEXT CHECK (student_status IN ('active', 'graduated', 'dropped', 'suspended')),
         gpa DECIMAL(3,2),
         major_id INT,
-        advisor_id INT,
+        school_leader_id INT,
         address_id INT,
         created_at TIMESTAMP DEFAULT now()
     );
@@ -80,7 +80,7 @@ on-run-start: |-
         enrollment_id SERIAL PRIMARY KEY,
         student_id INT,
         course_id INT,
-        semester_id INT,
+        quarter_id INT,
         enrollment_date DATE,
         completion_date DATE,
         grade TEXT,
@@ -89,10 +89,10 @@ on-run-start: |-
         created_at TIMESTAMP DEFAULT now()
     );
 
-    -- 6. Semesters table
-    CREATE TABLE if not exists raw_edu.semesters (
-        semester_id SERIAL PRIMARY KEY,
-        semester_name TEXT NOT NULL,
+    -- 6. Quarters table
+    CREATE TABLE if not exists raw_edu.quarters (
+        quarter_id SERIAL PRIMARY KEY,
+        quarter_name TEXT NOT NULL,
         academic_year TEXT,
         start_date DATE,
         end_date DATE,
@@ -105,7 +105,7 @@ on-run-start: |-
         session_id SERIAL PRIMARY KEY,
         course_id INT,
         faculty_id INT,
-        semester_id INT,
+        quarter_id INT,
         session_time TIME,
         session_date DATE,
         room_id INT,
@@ -117,7 +117,7 @@ on-run-start: |-
     CREATE TABLE if not exists raw_edu.assignments (
         assignment_id SERIAL PRIMARY KEY,
         course_id INT,
-        semester_id INT,
+        quarter_id INT,
         assignment_name TEXT NOT NULL,
         assignment_type TEXT,
         due_date DATE,
@@ -153,7 +153,7 @@ on-run-start: |-
     CREATE TABLE if not exists raw_edu.tuition_payments (
         payment_id SERIAL PRIMARY KEY,
         student_id INT,
-        semester_id INT,
+        quarter_id INT,
         amount DECIMAL(10,2),
         payment_date DATE,
         payment_method TEXT,
@@ -163,7 +163,7 @@ on-run-start: |-
 
     -- Clear existing data
     TRUNCATE TABLE raw_edu.students, raw_edu.courses, raw_edu.departments, raw_edu.faculty, 
-                  raw_edu.enrollments, raw_edu.semesters, raw_edu.class_sessions, 
+                  raw_edu.enrollments, raw_edu.quarters, raw_edu.class_sessions, 
                   raw_edu.assignments, raw_edu.assignment_submissions, raw_edu.financial_aid, 
                   raw_edu.tuition_payments CASCADE;
 
@@ -182,7 +182,7 @@ on-run-start: |-
         ('Emily', 'Davis', 'e.davis@edu.edu', 3, 'Assistant Professor', 72000.00, '2020-08-20', 'BC-401'),
         ('Robert', 'Wilson', 'r.wilson@edu.edu', 5, 'Professor', 105000.00, '2010-01-15', 'EC-101');
 
-    INSERT INTO raw_edu.semesters (semester_name, academic_year, start_date, end_date, is_current) VALUES
+    INSERT INTO raw_edu.quarters (quarter_name, academic_year, start_date, end_date, is_current) VALUES
         ('Fall 2023', '2023-2024', '2023-08-28', '2023-12-15', false),
         ('Spring 2024', '2023-2024', '2024-01-15', '2024-05-10', false),
         ('Fall 2024', '2024-2025', '2024-08-26', '2024-12-13', true),
@@ -230,5 +230,5 @@ models:
         +materialized: table
 
 vars:
-  current_semester: "'Fall 2024'"
+  current_quarter: "'Fall 2024'"
   academic_year: "'2024-2025'"

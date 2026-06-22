@@ -4,7 +4,7 @@ with assignment_data as (
     select
         a.assignment_id,
         a.course_id,
-        a.semester_id,
+        a.quarter_id,
         a.assignment_name,
         a.assignment_type,
         a.assignment_category,
@@ -16,7 +16,7 @@ with assignment_data as (
         c.course_code,
         c.course_name,
         c.difficulty_level,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year,
         sub.submission_id,
         sub.student_id,
@@ -31,7 +31,7 @@ with assignment_data as (
         s.academic_standing
     from {{ ref('stg_assignments') }} a
     left join {{ ref('stg_courses') }} c on a.course_id = c.course_id
-    left join {{ ref('stg_semesters') }} sem on a.semester_id = sem.semester_id
+    left join {{ ref('stg_quarters') }} sem on a.quarter_id = sem.quarter_id
     left join {{ ref('stg_assignment_submissions') }} sub on a.assignment_id = sub.assignment_id
     left join {{ ref('stg_students') }} s on sub.student_id = s.student_id
 ),
@@ -40,7 +40,7 @@ assignment_metrics as (
     select
         assignment_id,
         course_id,
-        semester_id,
+        quarter_id,
         assignment_name,
         assignment_type,
         assignment_category,
@@ -52,7 +52,7 @@ assignment_metrics as (
         course_code,
         course_name,
         difficulty_level,
-        semester_name,
+        quarter_name,
         academic_year,
         count(distinct submission_id) as total_submissions,
         count(distinct student_id) as unique_students_submitted,
@@ -83,9 +83,9 @@ assignment_metrics as (
     from assignment_data
     where assignment_id is not null
     group by 
-        assignment_id, course_id, semester_id, assignment_name, assignment_type, 
+        assignment_id, course_id, quarter_id, assignment_name, assignment_type, 
         assignment_category, due_date, due_status, max_points, weight_percentage, 
-        weight_category, course_code, course_name, difficulty_level, semester_name, academic_year
+        weight_category, course_code, course_name, difficulty_level, quarter_name, academic_year
 )
 
 select * from assignment_metrics

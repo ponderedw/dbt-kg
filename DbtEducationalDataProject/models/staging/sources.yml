@@ -57,11 +57,11 @@ sources:
               - unique
               - not_null
 
-      - name: semesters
-        description: Academic semester information
+      - name: quarters
+        description: Academic quarter information
         columns:
-          - name: semester_id
-            description: Unique semester identifier
+          - name: quarter_id
+            description: Unique quarter identifier
             tests:
               - unique
               - not_null

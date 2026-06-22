@@ -8,7 +8,7 @@ with faculty_student_connections as (
         f.department_id,
         f.years_of_service,
         cs.course_id,
-        cs.semester_id,
+        cs.quarter_id,
         e.student_id,
         e.grade,
         e.grade_points,
@@ -21,15 +21,15 @@ with faculty_student_connections as (
         c.course_name,
         c.difficulty_level,
         c.credits,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year,
         d.department_name
     from {{ ref('stg_faculty') }} f
     inner join {{ ref('stg_class_sessions') }} cs on f.faculty_id = cs.faculty_id
     inner join {{ ref('stg_courses') }} c on cs.course_id = c.course_id
-    inner join {{ ref('stg_enrollments') }} e on c.course_id = e.course_id and cs.semester_id = e.semester_id
+    inner join {{ ref('stg_enrollments') }} e on c.course_id = e.course_id and cs.quarter_id = e.quarter_id
     inner join {{ ref('stg_students') }} s on e.student_id = s.student_id
-    inner join {{ ref('stg_semesters') }} sem on cs.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on cs.quarter_id = sem.quarter_id
     inner join {{ ref('stg_departments') }} d on f.department_id = d.department_id
 ),
 
@@ -42,7 +42,7 @@ faculty_teaching_effectiveness as (
         years_of_service,
         count(distinct student_id) as total_unique_students_taught,
         count(distinct course_id) as unique_courses_taught,
-        count(distinct semester_id) as semesters_taught,
+        count(distinct quarter_id) as quarters_taught,
         avg(grade_points) as avg_grade_given,
         avg(attendance_percentage) as avg_student_attendance,
         stddev(grade_points) as grade_consistency,
@@ -110,7 +110,7 @@ interaction_quality_metrics as (
             when fte.grade_consistency <= 1.5 then 'Somewhat Inconsistent'
             else 'Inconsistent Grading'
         end as grading_consistency_level,
-        round(fte.total_unique_students_taught::numeric / fte.semesters_taught, 2) as avg_students_per_semester
+        round(fte.total_unique_students_taught::numeric / fte.quarters_taught, 2) as avg_students_per_quarter
     from faculty_teaching_effectiveness fte
 )
 

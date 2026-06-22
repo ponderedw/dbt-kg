@@ -8,11 +8,11 @@ with historical_grades as (
         c.department_id,
         c.difficulty_level,
         d.department_name,
-        e.semester_id,
+        e.quarter_id,
         e.grade,
         e.grade_points,
         sem.academic_year,
-        sem.semester_type,
+        sem.quarter_type,
         extract(year from sem.start_date) as year,
         f.faculty_id,
         f.faculty_name,
@@ -28,8 +28,8 @@ with historical_grades as (
     from {{ ref('stg_enrollments') }} e
     inner join {{ ref('stg_courses') }} c on e.course_id = c.course_id
     inner join {{ ref('stg_departments') }} d on c.department_id = d.department_id
-    inner join {{ ref('stg_semesters') }} sem on e.semester_id = sem.semester_id
-    left join {{ ref('stg_class_sessions') }} cs on c.course_id = cs.course_id and e.semester_id = cs.semester_id
+    inner join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
+    left join {{ ref('stg_class_sessions') }} cs on c.course_id = cs.course_id and e.quarter_id = cs.quarter_id
     left join {{ ref('stg_faculty') }} f on cs.faculty_id = f.faculty_id
     where e.grade is not null and e.grade != 'W'
 ),

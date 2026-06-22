@@ -47,8 +47,8 @@ course_sequencing as (
         c.difficulty_level,
         c.prerequisite_course_id,
         prereq.course_code as prerequisite_code,
-        eh.semester_id,
-        sem.semester_name,
+        eh.quarter_id,
+        sem.quarter_name,
         sem.start_date,
         row_number() over (partition by eh.student_id order by sem.start_date) as course_sequence_number,
         case when c.prerequisite_course_id is not null then 1 else 0 end as has_prerequisite,
@@ -57,7 +57,7 @@ course_sequencing as (
     from {{ ref('int_student_enrollment_history') }} eh
     inner join {{ ref('stg_courses') }} c on eh.course_id = c.course_id
     left join {{ ref('stg_courses') }} prereq on c.prerequisite_course_id = prereq.course_id
-    inner join {{ ref('stg_semesters') }} sem on eh.semester_id = sem.semester_id
+    inner join {{ ref('stg_quarters') }} sem on eh.quarter_id = sem.quarter_id
 ),
 
 pathway_efficiency as (

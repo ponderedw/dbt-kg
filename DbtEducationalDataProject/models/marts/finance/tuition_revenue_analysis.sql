@@ -4,7 +4,7 @@ with tuition_data as (
     select
         tp.payment_id,
         tp.student_id,
-        tp.semester_id,
+        tp.quarter_id,
         tp.amount,
         tp.payment_date,
         tp.payment_method_category,
@@ -13,11 +13,11 @@ with tuition_data as (
         tp.payment_timeliness,
         tp.payment_year,
         tp.payment_month,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year,
-        sem.semester_type,
-        sem.start_date as semester_start,
-        sem.end_date as semester_end,
+        sem.quarter_type,
+        sem.start_date as quarter_start,
+        sem.end_date as quarter_end,
         s.student_status,
         s.gpa,
         s.academic_standing,
@@ -27,19 +27,19 @@ with tuition_data as (
         d.budget as department_budget,
         extract(quarter from tp.payment_date) as payment_quarter
     from {{ ref('stg_tuition_payments') }} tp
-    left join {{ ref('stg_semesters') }} sem on tp.semester_id = sem.semester_id
+    left join {{ ref('stg_quarters') }} sem on tp.quarter_id = sem.quarter_id
     left join {{ ref('stg_students') }} s on tp.student_id = s.student_id
     left join {{ ref('stg_departments') }} d on s.major_id = d.department_id
 ),
 
 revenue_metrics as (
     select
-        semester_id,
-        semester_name,
+        quarter_id,
+        quarter_name,
         academic_year,
-        semester_type,
-        semester_start,
-        semester_end,
+        quarter_type,
+        quarter_start,
+        quarter_end,
         department_name,
         department_code,
         payment_year,
@@ -65,8 +65,8 @@ revenue_metrics as (
         ) as late_fee_percentage_of_revenue
     from tuition_data
     group by 
-        semester_id, semester_name, academic_year, semester_type, semester_start, 
-        semester_end, department_name, department_code, payment_year, payment_quarter
+        quarter_id, quarter_name, academic_year, quarter_type, quarter_start,
+        quarter_end, department_name, department_code, payment_year, payment_quarter
 ),
 
 comparative_analysis as (

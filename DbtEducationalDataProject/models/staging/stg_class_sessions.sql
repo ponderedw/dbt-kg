@@ -5,7 +5,7 @@ with source_data as (
         session_id,
         course_id,
         faculty_id,
-        semester_id,
+        quarter_id,
         session_time,
         session_date,
         room_id,

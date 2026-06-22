@@ -12,7 +12,7 @@ with faculty_courses as (
         d.department_name,
         d.department_code,
         cs.course_id,
-        cs.semester_id,
+        cs.quarter_id,
         cs.session_date,
         cs.session_time,
         cs.time_block,
@@ -21,7 +21,7 @@ with faculty_courses as (
         c.course_name,
         c.credits,
         c.difficulty_level,
-        sem.semester_name,
+        sem.quarter_name,
         sem.academic_year,
         e.enrollment_id,
         e.student_id
@@ -29,8 +29,8 @@ with faculty_courses as (
     left join {{ ref('stg_departments') }} d on f.department_id = d.department_id
     left join {{ ref('stg_class_sessions') }} cs on f.faculty_id = cs.faculty_id
     left join {{ ref('stg_courses') }} c on cs.course_id = c.course_id
-    left join {{ ref('stg_semesters') }} sem on cs.semester_id = sem.semester_id
-    left join {{ ref('stg_enrollments') }} e on c.course_id = e.course_id and sem.semester_id = e.semester_id
+    left join {{ ref('stg_quarters') }} sem on cs.quarter_id = sem.quarter_id
+    left join {{ ref('stg_enrollments') }} e on c.course_id = e.course_id and sem.quarter_id = e.quarter_id
 ),
 
 faculty_metrics as (
@@ -45,7 +45,7 @@ faculty_metrics as (
         department_name,
         department_code,
         count(distinct course_id) as unique_courses_taught,
-        count(distinct semester_id) as semesters_active,
+        count(distinct quarter_id) as quarters_active,
         count(distinct session_date) as total_class_sessions,
         count(distinct enrollment_id) as total_students_taught,
         avg(attendance_count) as avg_class_attendance,

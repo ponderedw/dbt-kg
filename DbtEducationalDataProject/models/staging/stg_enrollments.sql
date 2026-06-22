@@ -5,7 +5,7 @@ with source_data as (
         enrollment_id,
         student_id,
         course_id,
-        semester_id,
+        quarter_id,
         enrollment_date,
         completion_date,
         grade,

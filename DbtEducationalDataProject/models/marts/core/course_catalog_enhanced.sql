@@ -17,7 +17,7 @@ with course_details as (
         prereq.course_name as prerequisite_name,
         cpm.total_enrollments,
         cpm.unique_students,
-        cpm.semesters_offered,
+        cpm.quarters_offered,
         cpm.avg_grade_points,
         cpm.avg_attendance,
         cpm.pass_rate,

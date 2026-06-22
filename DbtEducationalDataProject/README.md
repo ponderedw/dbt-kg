@@ -42,14 +42,14 @@ This project models a complete educational institution's data ecosystem, includi
 - **Enrollments**: Course registrations and performance
 - **Assignments**: Coursework and submission tracking
 - **Financial**: Tuition payments and financial aid
-- **Academic Calendar**: Semesters and schedules
+- **Academic Calendar**: Quarters and schedules
 
 ### Model Architecture
 
 #### Staging Layer (12 models)
 Data cleaning and standardization:
 - `stg_students`, `stg_faculty`, `stg_courses`, `stg_departments`
-- `stg_enrollments`, `stg_semesters`, `stg_class_sessions`
+- `stg_enrollments`, `stg_quarters`, `stg_class_sessions`
 - `stg_assignments`, `stg_assignment_submissions`
 - `stg_financial_aid`, `stg_tuition_payments`
 
@@ -84,7 +84,7 @@ Complex business logic and relationships:
 **Academic Analytics (7):**
 - `student_retention_analysis`: Dropout prevention
 - `course_success_predictors`: Academic outcome modeling
-- `semester_enrollment_trends`: Enrollment patterns
+- `quarter_enrollment_trends`: Enrollment patterns
 - `instructor_effectiveness_scorecard`: Teaching quality
 - `assignment_workload_analysis`: Course load optimization
 - `learning_outcome_assessment`: Educational effectiveness
@@ -125,7 +125,7 @@ Complex business logic and relationships:
 
 ### Seeds and Reference Data
 - `grade_scale_reference`: Grading standards
-- `semester_calendar`: Academic calendar
+- `quarter_calendar`: Academic calendar
 - `academic_calendar_holidays`: Holiday tracking
 
 ## Getting Started
