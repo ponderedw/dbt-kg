@@ -112,7 +112,7 @@ departmental_retention as (
         round(
             count(case when retention_status = 'Dropped Out' then 1 end) * 100.0 / 
             nullif(count(*), 0), 2
-        ) as dropout_rate,
+        ) as exit_rate,
         round(
             count(case when risk_category like '%High Risk%' or risk_category like '%Critical%' then 1 end) * 100.0 / 
             nullif(count(case when retention_status = 'Currently Enrolled' then 1 end), 0), 2
@@ -126,7 +126,7 @@ select
     dr.graduated_students as dept_graduated_students,
     dr.currently_enrolled as dept_currently_enrolled,
     dr.graduation_rate as dept_graduation_rate,
-    dr.dropout_rate as dept_dropout_rate,
+    dr.exit_rate as dept_exit_rate,
     dr.at_risk_percentage as dept_at_risk_percentage,
     dr.avg_graduation_time as dept_avg_graduation_time,
     dr.dept_avg_gpa,

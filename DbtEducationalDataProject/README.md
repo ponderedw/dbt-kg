@@ -82,7 +82,7 @@ Complex business logic and relationships:
 - `institutional_kpi_dashboard`: Key performance indicators
 
 **Academic Analytics (7):**
-- `student_retention_analysis`: Dropout prevention
+- `student_retention_analysis`: Exit and transfer-out prevention
 - `course_success_predictors`: Academic outcome modeling
 - `quarter_enrollment_trends`: Enrollment patterns
 - `instructor_effectiveness_scorecard`: Teaching quality

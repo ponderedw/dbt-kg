@@ -34,11 +34,11 @@ with course_details as (
             else 'Low Success Rate'
         end as success_category,
         case
-            when cpm.withdrawal_rate >= 20 then 'High Dropout Risk'
-            when cpm.withdrawal_rate >= 10 then 'Moderate Dropout Risk'
-            when cpm.withdrawal_rate >= 5 then 'Low Dropout Risk'
-            else 'Minimal Dropout Risk'
-        end as dropout_risk,
+            when cpm.withdrawal_rate >= 20 then 'High Exit Risk'
+            when cpm.withdrawal_rate >= 10 then 'Moderate Exit Risk'
+            when cpm.withdrawal_rate >= 5 then 'Low Exit Risk'
+            else 'Minimal Exit Risk'
+        end as exit_risk,
         case
             when cpm.avg_attendance >= 95 then 'Excellent Engagement'
             when cpm.avg_attendance >= 85 then 'Good Engagement'

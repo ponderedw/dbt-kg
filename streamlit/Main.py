@@ -4,6 +4,18 @@ import requests
 import datetime
 import dateutil.relativedelta
 
+# ── Password gate ──────────────────────────────────────────────────────────
+_password = os.environ.get("STREAMLIT_PASSWORD", "")
+if _password and not st.session_state.get("authenticated"):
+    st.title("Ponder Chat")
+    pwd = st.text_input("Password", type="password", key="login_pwd")
+    if st.button("Login"):
+        if pwd == _password:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password")
+    st.stop()
 
 if "http_session" not in st.session_state:
     st.session_state.http_session = requests.Session()

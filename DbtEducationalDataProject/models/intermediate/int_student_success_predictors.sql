@@ -13,7 +13,7 @@ with student_baseline_metrics as (
         first_value(e.grade_points) over (partition by s.student_id order by sem.start_date) as first_quarter_gpa,
         first_value(e.attendance_percentage) over (partition by s.student_id order by sem.start_date) as first_quarter_attendance,
         first_value(c.difficulty_level) over (partition by s.student_id order by sem.start_date) as first_course_difficulty,
-        -- Financial indicators
+        -- Academic engagement indicators
         fa.total_aid_received,
         fa.aid_recipient_category,
         tp.late_payment_rate,

@@ -118,7 +118,7 @@ calibration_assessment as (
             when calculated_difficulty < assigned_difficulty - 1 and pass_rate > 95 then
                 'Consider increasing course rigor or advancing difficulty level'
             when withdrawal_rate > 20 then
-                'High dropout rate suggests course may be too demanding'
+                'High exit rate suggests course may be too demanding'
             when avg_attendance < 70 then
                 'Low engagement suggests course structure review needed'
             when difficulty_calibration_error > 1.5 then

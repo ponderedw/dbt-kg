@@ -112,7 +112,7 @@ These questions use keyword matching against model descriptions. Faster and more
 - "Which models reference 'assign*' — assignments, assignees, etc.?"
 
 **Boolean operators**
-- "Find models that mention 'graduation' but NOT 'dropout'."
+- "Find models that mention 'graduation' but NOT 'exit'."
 - "Which models describe both 'faculty' AND 'workload'?"
 - "Show models that mention 'risk' OR 'warning' in their description."
 

@@ -146,7 +146,7 @@ models:
         description: Average years from first enrollment to graduation.
       - name: on_time_graduation_rate
         description: Fraction graduating within the standard program length.
-      - name: dropout_rate
+      - name: exit_rate
         description: Fraction who left without graduating.
 
   - name: institutional_effectiveness_dashboard
@@ -192,8 +192,8 @@ models:
   - name: academic_early_warning_system
     description: >
       Student risk flags and intervention recommendations. Combines GPA,
-      attendance, assignment submission and financial indicators to identify
-      students who need academic support before they drop or fail.
+      attendance, assignment submission and academic engagement indicators to identify
+      students who need academic support before they exit or transfer out.
     columns:
       - name: student_id
         description: Unique student identifier.

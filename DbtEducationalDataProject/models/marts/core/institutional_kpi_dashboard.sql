@@ -20,7 +20,7 @@ with enrollment_kpis as (
         round(
             count(distinct case when s.student_status = 'dropped' then s.student_id end) * 100.0 / 
             nullif(count(distinct s.student_id), 0), 2
-        ) as dropout_rate
+        ) as exit_rate
     from {{ ref('stg_students') }} s
     left join {{ ref('stg_enrollments') }} e on s.student_id = e.student_id
 ),

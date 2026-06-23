@@ -24,7 +24,7 @@ with program_performance_metrics as (
         round(
             count(case when s.student_status = 'dropped' then 1 end) * 100.0 / 
             nullif(count(distinct s.student_id), 0), 2
-        ) as dropout_rate
+        ) as exit_rate
     from {{ ref('stg_departments') }} d
     left join {{ ref('stg_students') }} s on d.department_id = s.major_id
     left join {{ ref('stg_faculty') }} f on d.department_id = f.department_id
@@ -95,7 +95,7 @@ competitive_analysis as (
         ppm.program_avg_gpa,
         ppm.graduation_rate,
         ppm.honors_percentage,
-        ppm.dropout_rate,
+        ppm.exit_rate,
         fpm.revenue_per_student,
         fpm.cost_per_student,
         fpm.revenue_efficiency_ratio,
@@ -123,9 +123,9 @@ competitive_analysis as (
                   when ppm.program_avg_gpa >= 3.0 then 20
                   when ppm.program_avg_gpa >= 2.5 then 15
                   else 10 end) +
-            (case when ppm.dropout_rate <= 5 then 25
-                  when ppm.dropout_rate <= 10 then 20
-                  when ppm.dropout_rate <= 15 then 15
+            (case when ppm.exit_rate <= 5 then 25
+                  when ppm.exit_rate <= 10 then 20
+                  when ppm.exit_rate <= 15 then 15
                   else 10 end), 0
         ) as academic_excellence_score,
         
