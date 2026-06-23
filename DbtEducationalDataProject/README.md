@@ -1,6 +1,6 @@
 # DbtEducationalDataProject
 
-A comprehensive educational data analytics project built with dbt, featuring 45 interconnected models that analyze student performance, faculty effectiveness, financial metrics, and institutional operations.
+A comprehensive educational data analytics project built with dbt, featuring 45 interconnected models that analyze student performance, faculty effectiveness, program effectiveness, and institutional operations.
 
 ## Project Overview
 
@@ -41,7 +41,7 @@ This project models a complete educational institution's data ecosystem, includi
 - **Departments**: Budgets, organization structure
 - **Enrollments**: Course registrations and performance
 - **Assignments**: Coursework and submission tracking
-- **Financial**: Tuition payments and financial aid
+- **Activities**: Extracurricular participation and attendance records
 - **Academic Calendar**: Quarters and schedules
 
 ### Model Architecture
@@ -51,7 +51,7 @@ Data cleaning and standardization:
 - `stg_students`, `stg_faculty`, `stg_courses`, `stg_departments`
 - `stg_enrollments`, `stg_quarters`, `stg_class_sessions`
 - `stg_assignments`, `stg_assignment_submissions`
-- `stg_financial_aid`, `stg_tuition_payments`
+- `stg_extracurricular_activities`, `stg_attendance_records`
 
 #### Intermediate Layer (12 models)
 Complex business logic and relationships:
@@ -91,12 +91,12 @@ Complex business logic and relationships:
 - `course_difficulty_calibration`: Curriculum standards
 - `competitive_program_benchmarking`: Program comparison
 
-**Financial Analytics (5):**
-- `student_financial_profile`: Individual financial tracking
-- `tuition_revenue_analysis`: Revenue management
-- `financial_aid_impact_analysis`: Aid effectiveness
-- `institutional_revenue_optimization`: Financial planning
-- `budget_allocation_optimization`: Resource allocation
+**Programs & Operations (5):**
+- `student_activity_profile`: Student extracurricular and attendance summary
+- `attendance_analytics`: Attendance trend and intervention analysis
+- `extracurricular_impact_analysis`: Activity participation impact on academics
+- `program_participation_analysis`: Program engagement by department and quarter
+- `resource_allocation_analysis`: Department resource efficiency and optimization
 
 ### Key Features
 

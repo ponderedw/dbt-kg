@@ -138,34 +138,35 @@ on-run-start: |-
         created_at TIMESTAMP DEFAULT now()
     );
 
-    -- 10. Financial aid table
-    CREATE TABLE if not exists raw_edu.financial_aid (
-        aid_id SERIAL PRIMARY KEY,
+    -- 10. Extracurricular activities table
+    CREATE TABLE if not exists raw_edu.extracurricular_activities (
+        activity_id SERIAL PRIMARY KEY,
         student_id INT,
-        aid_type TEXT,
-        amount DECIMAL(10,2),
-        academic_year TEXT,
-        disbursement_date DATE,
-        created_at TIMESTAMP DEFAULT now()
+        activity_name VARCHAR(100),
+        activity_type VARCHAR(50),
+        hours_per_week DECIMAL(4,1),
+        academic_year VARCHAR(9),
+        start_date DATE,
+        created_at TIMESTAMP DEFAULT NOW()
     );
 
-    -- 11. Tuition payments table
-    CREATE TABLE if not exists raw_edu.tuition_payments (
-        payment_id SERIAL PRIMARY KEY,
+    -- 11. Attendance records table
+    CREATE TABLE if not exists raw_edu.attendance_records (
+        attendance_id SERIAL PRIMARY KEY,
         student_id INT,
         quarter_id INT,
-        amount DECIMAL(10,2),
-        payment_date DATE,
-        payment_method TEXT,
-        late_fee DECIMAL(8,2) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT now()
+        attendance_percentage DECIMAL(5,2),
+        excused_absences INT,
+        unexcused_absences INT,
+        tardies INT,
+        created_at TIMESTAMP DEFAULT NOW()
     );
 
     -- Clear existing data
-    TRUNCATE TABLE raw_edu.students, raw_edu.courses, raw_edu.departments, raw_edu.faculty, 
-                  raw_edu.enrollments, raw_edu.quarters, raw_edu.class_sessions, 
-                  raw_edu.assignments, raw_edu.assignment_submissions, raw_edu.financial_aid, 
-                  raw_edu.tuition_payments CASCADE;
+    TRUNCATE TABLE raw_edu.students, raw_edu.courses, raw_edu.departments, raw_edu.faculty,
+                  raw_edu.enrollments, raw_edu.quarters, raw_edu.class_sessions,
+                  raw_edu.assignments, raw_edu.assignment_submissions, raw_edu.extracurricular_activities,
+                  raw_edu.attendance_records CASCADE;
 
     -- Insert sample data
     INSERT INTO raw_edu.departments (department_name, department_code, budget, building_location) VALUES

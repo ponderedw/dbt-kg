@@ -121,15 +121,15 @@ models:
       - name: low_attendance_flag
         description: True if average attendance dropped below 75% this quarter.
       - name: assessment_score_flag
-        description: True if the student has an outstanding tuition balance with no aid approval.
+        description: True if the student has chronic unexcused absences with no extracurricular engagement.
       - name: risk_score
-        description: Composite risk score (0–100) combining GPA, attendance and financial signals.
+        description: Composite risk score (0–100) combining GPA, attendance and engagement signals.
 
   - name: int_student_success_predictors
     description: >
       Feature set for predicting student academic success. Combines enrollment
-      history, assignment performance, attendance patterns and financial aid
-      status into a single row per student for ML or reporting use.
+      history, assignment performance, attendance patterns and extracurricular
+      engagement into a single row per student for ML or reporting use.
     columns:
       - name: student_id
         description: Foreign key to the student.
@@ -139,8 +139,8 @@ models:
         description: Average attendance rate during the most recent completed quarter.
       - name: on_time_submission_rate
         description: Fraction of assignments submitted on time historically.
-      - name: total_aid_received
-        description: Total financial aid disbursed to date in USD.
+      - name: avg_attendance_rate
+        description: Average attendance percentage across all recorded quarters.
       - name: credits_remaining
         description: Estimated credits remaining to reach graduation requirements.
 

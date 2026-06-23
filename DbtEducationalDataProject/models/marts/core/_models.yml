@@ -173,17 +173,17 @@ models:
   - name: institutional_kpi_dashboard
     description: >
       Key performance indicators for executive and board-level reporting.
-      Combines enrollment health, financial sustainability, academic quality
+      Combines enrollment health, attendance metrics, academic quality
       and student success metrics into a single consolidated view.
     columns:
       - name: kpi_period
         description: Academic year or quarter the KPIs apply to.
       - name: enrollment_growth_pct
         description: Year-over-year change in total enrollment.
-      - name: revenue_per_student
-        description: Total tuition revenue divided by enrolled students.
-      - name: financial_aid_coverage_pct
-        description: Fraction of students receiving any form of financial aid.
+      - name: avg_attendance_rate
+        description: Average student attendance rate across all recorded quarters.
+      - name: activity_participation_rate
+        description: Fraction of students participating in extracurricular activities.
       - name: student_success_index
         description: Composite index combining GPA trends, retention and graduation rates.
       - name: faculty_student_ratio

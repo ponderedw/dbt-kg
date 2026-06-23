@@ -70,26 +70,23 @@ faculty_kpis as (
     left join {{ ref('stg_students') }} s on e.student_id = s.student_id
 ),
 
-financial_kpis as (
+attendance_kpis as (
     select
         current_date as report_date,
-        'Financial Metrics' as kpi_category,
-        sum(tp.amount) as total_tuition_revenue,
-        sum(fa.amount) as total_financial_aid,
-        sum(d.budget) as total_departmental_budgets,
-        sum(f.salary) as total_faculty_compensation,
-        round(sum(tp.amount) / nullif(count(distinct s.student_id), 0), 2) as revenue_per_student,
-        round(sum(d.budget) / nullif(count(distinct s.student_id), 0), 2) as cost_per_student,
-        round(sum(tp.amount) / nullif(sum(d.budget), 0), 2) as revenue_to_budget_ratio,
-        round(sum(f.salary) / nullif(sum(d.budget), 0) * 100, 2) as faculty_cost_percentage,
+        'Attendance Metrics' as kpi_category,
+        round(avg(ar.attendance_percentage), 2) as avg_attendance_rate,
+        count(case when ar.attendance_percentage < 80 then 1 end) as students_below_threshold,
         round(
-            sum(fa.amount) * 100.0 / nullif(sum(tp.amount) + sum(fa.amount), 0), 2
-        ) as financial_aid_percentage
-    from {{ ref('stg_tuition_payments') }} tp
-    full outer join {{ ref('stg_financial_aid') }} fa on tp.student_id = fa.student_id
-    full outer join {{ ref('stg_students') }} s on coalesce(tp.student_id, fa.student_id) = s.student_id
-    full outer join {{ ref('stg_departments') }} d on s.major_id = d.department_id
-    full outer join {{ ref('stg_faculty') }} f on d.department_id = f.department_id
+            count(case when ar.attendance_percentage >= 90 then 1 end) * 100.0 /
+            nullif(count(ar.attendance_id), 0), 2
+        ) as good_attendance_rate,
+        count(distinct ea.student_id) as students_in_activities,
+        round(
+            count(distinct ea.student_id) * 100.0 /
+            nullif(count(distinct ar.student_id), 0), 2
+        ) as activity_participation_rate
+    from {{ ref('stg_attendance_records') }} ar
+    left join {{ ref('stg_extracurricular_activities') }} ea on ar.student_id = ea.student_id
 ),
 
 operational_kpis as (
@@ -187,20 +184,20 @@ kpi_targets_and_status as (
     from faculty_kpis fkpi
     
     union all
-    
+
     select
-        fikpi.report_date,
-        fikpi.kpi_category,
-        'Revenue to Budget Ratio' as kpi_name,
-        fikpi.revenue_to_budget_ratio as actual_value,
-        1.2 as target_value,
-        case 
-            when fikpi.revenue_to_budget_ratio >= 1.2 then 'On Target'
-            when fikpi.revenue_to_budget_ratio >= 1.08 then 'Close to Target'
+        akpi.report_date,
+        akpi.kpi_category,
+        'Attendance Rate' as kpi_name,
+        akpi.avg_attendance_rate as actual_value,
+        90.0 as target_value,
+        case
+            when akpi.avg_attendance_rate >= 90 then 'On Target'
+            when akpi.avg_attendance_rate >= 81 then 'Close to Target'
             else 'Below Target'
         end as status,
-        round((fikpi.revenue_to_budget_ratio / 1.2) * 100, 1) as achievement_percentage
-    from financial_kpis fikpi
+        round((akpi.avg_attendance_rate / 90.0) * 100, 1) as achievement_percentage
+    from attendance_kpis akpi
 ),
 
 executive_dashboard_summary as (
@@ -238,7 +235,7 @@ select
         when kts.kpi_name = 'Total Active Students' and kts.status = 'Below Target' then 'Enhance recruitment and retention programs'
         when kts.kpi_name = 'Course Success Rate' and kts.status = 'Below Target' then 'Improve academic support and teaching effectiveness'
         when kts.kpi_name = 'Student Faculty Ratio' and kts.status = 'Below Target' then 'Optimize faculty allocation or adjust enrollment'
-        when kts.kpi_name = 'Revenue to Budget Ratio' and kts.status = 'Below Target' then 'Review pricing strategy and cost management'
+        when kts.kpi_name = 'Attendance Rate' and kts.status = 'Below Target' then 'Implement attendance improvement and engagement programs'
         else 'Maintain current practices'
     end as improvement_recommendation
 from kpi_targets_and_status kts

@@ -2,7 +2,7 @@
 
 # Welcome to DbtEducationalDataProject
 
-A comprehensive educational data analytics project built with dbt, featuring 45 interconnected models that analyze student performance, faculty effectiveness, financial metrics, and institutional operations.
+A comprehensive educational data analytics project built with dbt, featuring 45 interconnected models that analyze student performance, faculty effectiveness, program effectiveness, and institutional operations.
 
 ## Here's what makes dbt powerful:
 
@@ -103,9 +103,9 @@ These questions use keyword matching against model descriptions. Faster and more
 
 **Exact keyword lookup**
 - "Find all models that mention 'GPA' in their description."
-- "Which models describe something related to 'tuition'?"
+- "Which models describe something related to 'attendance'?"
 - "Show me models that contain the word 'retention' in their description."
-- "Find models that mention 'financial aid' and 'disbursement'."
+- "Find models that mention 'extracurricular' and 'participation'."
 
 **Prefix search**
 - "Find models whose descriptions mention anything starting with 'enroll*'."
@@ -144,7 +144,7 @@ These questions find models by *meaning* rather than exact name. The agent uses 
 These require the agent to first find relevant nodes via semantic search, then traverse the graph to answer the structural follow-up.
 
 - "Find the model that tracks at-risk students, then show me all the models it depends on."
-- "Which model best represents a student's financial profile? Show me everything downstream of its source tables."
+- "Which model best represents a student's activity and attendance profile? Show me everything downstream of its source tables."
 - "I want to understand grade inflation in our system — find the relevant model and then show me what feeds into it."
 - "Find models related to institutional KPIs, then tell me how many hops they are from raw sources."
 - "Which models deal with faculty performance? Show me their test coverage."

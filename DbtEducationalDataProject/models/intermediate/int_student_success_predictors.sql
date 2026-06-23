@@ -13,12 +13,12 @@ with student_baseline_metrics as (
         first_value(e.grade_points) over (partition by s.student_id order by sem.start_date) as first_quarter_gpa,
         first_value(e.attendance_percentage) over (partition by s.student_id order by sem.start_date) as first_quarter_attendance,
         first_value(c.difficulty_level) over (partition by s.student_id order by sem.start_date) as first_course_difficulty,
-        -- Academic engagement indicators
-        fa.total_aid_received,
-        fa.aid_recipient_category,
-        tp.late_payment_rate,
-        tp.payment_reliability,
-        -- Engagement indicators
+        -- Attendance and activity engagement indicators
+        ae.avg_attendance_rate,
+        ae.total_activities,
+        ae.is_active_participant,
+        ae.avg_hours_per_activity,
+        -- Enrollment engagement indicators
         eh.avg_attendance,
         eh.total_enrollments,
         eh.failed_courses_count,
@@ -31,21 +31,16 @@ with student_baseline_metrics as (
     left join {{ ref('stg_courses') }} c on e.course_id = c.course_id
     left join {{ ref('stg_quarters') }} sem on e.quarter_id = sem.quarter_id
     left join (
-        select 
-            student_id,
-            sum(total_aid_received) as total_aid_received,
-            max(aid_recipient_category) as aid_recipient_category
-        from {{ ref('student_financial_profile') }}
-        group by student_id
-    ) fa on s.student_id = fa.student_id
-    left join (
-        select 
-            student_id,
-            max(late_payment_rate) as late_payment_rate,
-            max(payment_reliability) as payment_reliability
-        from {{ ref('student_financial_profile') }}
-        group by student_id
-    ) tp on s.student_id = tp.student_id
+        select
+            ar.student_id,
+            round(avg(ar.attendance_percentage), 2) as avg_attendance_rate,
+            count(distinct ea.activity_id) as total_activities,
+            max(case when ea.student_id is not null then 1 else 0 end) as is_active_participant,
+            round(avg(ea.hours_per_week), 2) as avg_hours_per_activity
+        from {{ ref('stg_attendance_records') }} ar
+        left join {{ ref('stg_extracurricular_activities') }} ea on ar.student_id = ea.student_id
+        group by ar.student_id
+    ) ae on s.student_id = ae.student_id
     left join (
         select 
             student_id,
@@ -70,15 +65,15 @@ predictive_features as (
         
         -- Risk factors
         case when age > 25 then 1 else 0 end as non_traditional_age,
-        case when total_aid_received > 15000 then 1 else 0 end as high_financial_need,
-        case when late_payment_rate > 15 then 1 else 0 end as payment_issues,
+        case when avg_attendance_rate < 80 then 1 else 0 end as high_financial_need,
+        case when avg_attendance_rate < 75 then 1 else 0 end as payment_issues,
         case when avg_attendance < 80 then 1 else 0 end as attendance_concern,
         case when failed_courses_count > 0 then 1 else 0 end as has_failed_courses,
         case when withdrawn_courses_count > 2 then 1 else 0 end as excessive_withdrawals,
-        
+
         -- Protective factors
-        case when aid_recipient_category like '%Merit%' then 1 else 0 end as merit_based_aid,
-        case when payment_reliability = 'Excellent Payment History' then 1 else 0 end as reliable_payments,
+        case when is_active_participant = 1 then 1 else 0 end as merit_based_aid,
+        case when avg_attendance_rate >= 90 then 1 else 0 end as reliable_payments,
         case when total_credits_earned >= years_enrolled * 15 then 1 else 0 end as on_track_credits,
         
         -- Calculated metrics
@@ -137,16 +132,16 @@ success_scoring as (
         -- Primary success factors
         case
             when strong_academic_start = 1 and strong_engagement_start = 1 then 'Strong Foundation'
-            when reliable_payments = 1 and on_track_credits = 1 then 'Financial Stability'
-            when merit_based_aid = 1 and gpa >= 3.5 then 'Academic Excellence'
+            when reliable_payments = 1 and on_track_credits = 1 then 'Consistent Attendance and Progress'
+            when merit_based_aid = 1 and gpa >= 3.5 then 'Academic Excellence with Activity Engagement'
             when completion_rate >= 90 and avg_attendance >= 85 then 'Consistent Performance'
             else 'Mixed Indicators'
         end as primary_success_factor,
-        
+
         -- Primary risk factors
         case
             when attendance_concern = 1 and has_failed_courses = 1 then 'Academic Disengagement'
-            when payment_issues = 1 and high_financial_need = 1 then 'Financial Stress'
+            when payment_issues = 1 and high_financial_need = 1 then 'Attendance Concern'
             when excessive_withdrawals = 1 then 'Course Completion Issues'
             when non_traditional_age = 1 then 'Non-Traditional Challenges'
             else 'Standard Risk Profile'
@@ -161,8 +156,8 @@ intervention_recommendations as (
         case
             when overall_risk_category in ('Very High Risk', 'High Risk') and primary_risk_factor = 'Academic Disengagement' then
                 'Immediate academic coaching, mandatory study sessions, attendance monitoring'
-            when overall_risk_category in ('Very High Risk', 'High Risk') and primary_risk_factor = 'Financial Stress' then
-                'Emergency financial aid, payment plan restructuring, financial literacy counseling'
+            when overall_risk_category in ('Very High Risk', 'High Risk') and primary_risk_factor = 'Attendance Concern' then
+                'Attendance improvement plan, counselor referral, explore extracurricular engagement'
             when overall_risk_category in ('Very High Risk', 'High Risk') and primary_risk_factor = 'Course Completion Issues' then
                 'Academic planning review, prerequisite assessment, course load reduction'
             when overall_risk_category = 'Moderate Risk' then

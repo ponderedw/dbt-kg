@@ -65,14 +65,15 @@ assignment_performance_indicators as (
     group by e.student_id
 ),
 
-financial_stress_indicators as (
+engagement_indicators as (
     select
-        student_id,
-        max(case when late_payment_rate > 25 then 1 else 0 end) as has_payment_issues,
-        max(case when total_aid_received = 0 then 1 else 0 end) as no_financial_aid,
-        max(case when payment_reliability = 'Poor Payment History' then 1 else 0 end) as poor_payment_history
-    from {{ ref('student_financial_profile') }}
-    group by student_id
+        ar.student_id,
+        max(case when ar.attendance_percentage < 80 then 1 else 0 end) as has_attendance_issues,
+        max(case when ea.student_id is null then 1 else 0 end) as no_extracurricular_activity,
+        max(case when ar.unexcused_absences > 5 then 1 else 0 end) as chronic_unexcused_absences
+    from {{ ref('stg_attendance_records') }} ar
+    left join {{ ref('stg_extracurricular_activities') }} ea on ar.student_id = ea.student_id
+    group by ar.student_id
 ),
 
 early_warning_indicators as (
@@ -95,9 +96,9 @@ early_warning_indicators as (
         api.avg_assignment_percentage,
         api.late_submission_rate,
         api.poor_assignment_scores,
-        fsi.has_payment_issues,
-        fsi.no_financial_aid,
-        fsi.poor_payment_history,
+        ei.has_attendance_issues,
+        ei.no_extracurricular_activity,
+        ei.chronic_unexcused_absences,
         
         -- Academic warning flags
         case when csp.current_quarter_gpa < 2.0 then 1 else 0 end as academic_failure_flag,
@@ -111,8 +112,8 @@ early_warning_indicators as (
         case when api.avg_assignment_percentage < 65 then 1 else 0 end as poor_assignment_flag,
         case when hp.grade_consistency > 1.5 then 1 else 0 end as inconsistent_performance_flag,
         
-        -- Financial warning flags
-        case when fsi.has_payment_issues = 1 then 1 else 0 end as financial_stress_flag,
+        -- Engagement warning flags (attendance/activity)
+        case when ei.has_attendance_issues = 1 then 1 else 0 end as financial_stress_flag,
         
         -- Historical pattern flags
         case when hp.total_failed_courses >= 3 then 1 else 0 end as chronic_failure_flag,
@@ -130,7 +131,7 @@ early_warning_indicators as (
         group by student_id
     ) hp on csp.student_id = hp.student_id
     left join assignment_performance_indicators api on csp.student_id = api.student_id
-    left join financial_stress_indicators fsi on csp.student_id = fsi.student_id
+    left join engagement_indicators ei on csp.student_id = ei.student_id
 ),
 
 risk_scoring as (
@@ -167,7 +168,7 @@ risk_scoring as (
         case
             when academic_failure_flag = 1 or multiple_failures_flag = 1 then 'Academic Crisis'
             when attendance_warning_flag = 1 or disengagement_flag = 1 then 'Engagement Issues'
-            when financial_stress_flag = 1 then 'Financial Difficulties'
+            when financial_stress_flag = 1 then 'Attendance Concerns'
             when declining_performance_flag = 1 or inconsistent_performance_flag = 1 then 'Performance Decline'
             when chronic_failure_flag = 1 or withdrawal_pattern_flag = 1 then 'Chronic Issues'
             else 'General Risk'
@@ -183,7 +184,7 @@ intervention_planning as (
             when risk_level = 'Critical Risk' then 'URGENT: Schedule immediate meeting with academic school leader, dean, and counselor'
             when risk_level = 'High Risk' and primary_risk_category = 'Academic Crisis' then 'Schedule tutoring, reduce course load, academic probation review'
             when risk_level = 'High Risk' and primary_risk_category = 'Engagement Issues' then 'Mandatory attendance tracking, peer mentorship program'
-            when risk_level = 'High Risk' and primary_risk_category = 'Financial Difficulties' then 'Financial aid counseling, emergency assistance application'
+            when risk_level = 'High Risk' and primary_risk_category = 'Attendance Concerns' then 'Attendance improvement plan, connect with school counselor'
             when risk_level = 'Moderate Risk' then 'Proactive check-in with school leader, study skills workshop'
             when risk_level = 'Low Risk' then 'Monitor progress, optional support services'
             else 'Standard academic support'

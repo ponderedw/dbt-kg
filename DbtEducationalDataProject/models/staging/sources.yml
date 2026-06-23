@@ -75,8 +75,8 @@ sources:
       - name: assignment_submissions
         description: Student assignment submissions
 
-      - name: financial_aid
-        description: Student financial aid records
+      - name: extracurricular_activities
+        description: Student extracurricular activity participation records
 
-      - name: tuition_payments
-        description: Student tuition payment records
+      - name: attendance_records
+        description: Student attendance records by quarter

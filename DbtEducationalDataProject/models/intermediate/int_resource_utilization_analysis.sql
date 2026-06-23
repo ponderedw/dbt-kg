@@ -96,18 +96,20 @@ financial_resource_efficiency as (
         count(distinct s.student_id) as student_count,
         count(distinct c.course_id) as course_count,
         sum(f.salary) as total_faculty_costs,
-        sum(tp.amount) as department_tuition_revenue,
-        sum(fa.amount) as department_aid_disbursed,
+        round(avg(ar.attendance_percentage), 2) as avg_attendance_rate,
+        count(distinct ea.student_id) as students_with_activities,
         round(d.budget / nullif(count(distinct s.student_id), 0), 2) as budget_per_student,
         round(d.budget / nullif(count(distinct f.faculty_id), 0), 2) as budget_per_faculty,
-        round(sum(tp.amount) / nullif(d.budget, 0), 2) as revenue_to_budget_ratio,
+        round(
+            count(distinct ea.student_id) * 100.0 / nullif(count(distinct s.student_id), 0), 2
+        ) as activity_participation_rate,
         round(sum(f.salary) / nullif(d.budget, 0) * 100, 2) as faculty_cost_percentage
     from {{ ref('stg_departments') }} d
     left join {{ ref('stg_faculty') }} f on d.department_id = f.department_id
     left join {{ ref('stg_students') }} s on d.department_id = s.major_id
     left join {{ ref('stg_courses') }} c on d.department_id = c.department_id
-    left join {{ ref('stg_tuition_payments') }} tp on s.student_id = tp.student_id
-    left join {{ ref('stg_financial_aid') }} fa on s.student_id = fa.student_id
+    left join {{ ref('stg_attendance_records') }} ar on s.student_id = ar.student_id
+    left join {{ ref('stg_extracurricular_activities') }} ea on s.student_id = ea.student_id
     group by d.department_id, d.department_name, d.budget, d.department_size
 ),
 
@@ -151,15 +153,15 @@ resource_optimization_analysis as (
         end as assignment_management_category,
         
         fre.department_id as finance_dept_id,
-        fre.revenue_to_budget_ratio,
+        fre.activity_participation_rate,
         fre.faculty_cost_percentage,
         fre.budget_per_student,
         case
-            when fre.revenue_to_budget_ratio >= 1.2 then 'Highly Profitable'
-            when fre.revenue_to_budget_ratio >= 1.0 then 'Profitable'
-            when fre.revenue_to_budget_ratio >= 0.8 then 'Break Even'
-            else 'Loss Making'
-        end as financial_efficiency_category
+            when fre.activity_participation_rate >= 60 then 'Highly Engaged'
+            when fre.activity_participation_rate >= 40 then 'Engaged'
+            when fre.activity_participation_rate >= 20 then 'Low Engagement'
+            else 'Disengaged'
+        end as engagement_category
     from room_efficiency_metrics rem
     full outer join faculty_resource_allocation fra on 1=1  -- Cross join for analysis
     full outer join technology_assignment_utilization tau on 1=1
@@ -191,11 +193,11 @@ comprehensive_utilization_score as (
             when assignment_management_category = 'Fair Assignment Management' then 15
             else 10
         end as technology_score,
-        -- Financial efficiency score (0-25)
+        -- Engagement efficiency score (0-25)
         case
-            when financial_efficiency_category = 'Highly Profitable' then 25
-            when financial_efficiency_category = 'Profitable' then 20
-            when financial_efficiency_category = 'Break Even' then 15
+            when engagement_category = 'Highly Engaged' then 25
+            when engagement_category = 'Engaged' then 20
+            when engagement_category = 'Low Engagement' then 15
             else 10
         end as financial_score,
         
@@ -204,7 +206,7 @@ comprehensive_utilization_score as (
             when avg_capacity_utilization < 45 then 'Optimize room scheduling and capacity'
             when faculty_efficiency_category = 'Inefficient' then 'Review faculty workload and compensation'
             when assignment_management_category = 'Poor Assignment Management' then 'Improve assignment workflow processes'
-            when financial_efficiency_category = 'Loss Making' then 'Critical financial restructuring needed'
+            when engagement_category = 'Disengaged' then 'Expand extracurricular programs to improve engagement'
             else 'Continue monitoring and minor optimizations'
         end as utilization_recommendation
     from resource_optimization_analysis

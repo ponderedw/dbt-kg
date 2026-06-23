@@ -36,17 +36,16 @@ with program_performance_metrics as (
 financial_performance_metrics as (
     select
         d.department_name,
-        sum(tp.amount) as total_revenue,
-        sum(fa.amount) as aid_disbursed,
         sum(f.salary) as faculty_costs,
-        round(sum(tp.amount) / nullif(count(distinct s.student_id), 0), 2) as revenue_per_student,
         round(d.budget / nullif(count(distinct s.student_id), 0), 2) as cost_per_student,
-        round(sum(tp.amount) / nullif(d.budget, 0), 2) as revenue_efficiency_ratio,
-        round(sum(f.salary) / nullif(d.budget, 0) * 100, 2) as faculty_cost_ratio
+        round(
+            count(distinct ea.student_id) * 100.0 / nullif(count(distinct s.student_id), 0), 2
+        ) as revenue_efficiency_ratio,
+        round(sum(f.salary) / nullif(d.budget, 0) * 100, 2) as faculty_cost_ratio,
+        round(d.budget / nullif(count(distinct s.student_id), 0), 2) as revenue_per_student
     from {{ ref('stg_departments') }} d
     left join {{ ref('stg_students') }} s on d.department_id = s.major_id
-    left join {{ ref('stg_tuition_payments') }} tp on s.student_id = tp.student_id
-    left join {{ ref('stg_financial_aid') }} fa on s.student_id = fa.student_id
+    left join {{ ref('stg_extracurricular_activities') }} ea on s.student_id = ea.student_id
     left join {{ ref('stg_faculty') }} f on d.department_id = f.department_id
     group by d.department_name, d.budget
 ),
@@ -142,7 +141,7 @@ competitive_analysis as (
                   when fpm.faculty_cost_ratio <= 75 then 25
                   when fpm.faculty_cost_ratio <= 85 then 15
                   else 5 end), 0
-        ) as financial_efficiency_score,
+        ) as resource_efficiency_score,
         
         round(
             (case when fqm.senior_faculty_percentage >= 40 then 30
@@ -171,13 +170,13 @@ competitive_analysis as (
 benchmarking_analysis as (
     select
         ca.*,
-        (academic_excellence_score + financial_efficiency_score + program_quality_score) / 3 as overall_competitiveness_score,
+        (academic_excellence_score + resource_efficiency_score + program_quality_score) / 3 as overall_competitiveness_score,
         
         -- Rankings within institution
         row_number() over (order by academic_excellence_score desc) as academic_excellence_rank,
-        row_number() over (order by financial_efficiency_score desc) as financial_efficiency_rank,
+        row_number() over (order by resource_efficiency_score desc) as resource_efficiency_rank,
         row_number() over (order by program_quality_score desc) as program_quality_rank,
-        row_number() over (order by (academic_excellence_score + financial_efficiency_score + program_quality_score) desc) as overall_competitiveness_rank,
+        row_number() over (order by (academic_excellence_score + resource_efficiency_score + program_quality_score) desc) as overall_competitiveness_rank,
         
         -- Percentile rankings
         percent_rank() over (order by graduation_rate) as graduation_rate_percentile,
@@ -205,15 +204,15 @@ strategic_positioning as (
         end as competitive_position,
         
         case
-            when academic_excellence_score > program_quality_score and academic_excellence_score > financial_efficiency_score then 'Academic Excellence Focus'
-            when financial_efficiency_score > program_quality_score then 'Cost Leadership Focus'
-            when program_quality_score > financial_efficiency_score then 'Quality Differentiation Focus'
+            when academic_excellence_score > program_quality_score and academic_excellence_score > resource_efficiency_score then 'Academic Excellence Focus'
+            when resource_efficiency_score > program_quality_score then 'Cost Leadership Focus'
+            when program_quality_score > resource_efficiency_score then 'Quality Differentiation Focus'
             else 'Balanced Approach'
         end as strategic_strength,
         
         case
             when academic_excellence_score < 40 then 'Improve academic outcomes and retention'
-            when financial_efficiency_score < 40 then 'Optimize costs and improve revenue generation'
+            when resource_efficiency_score < 40 then 'Optimize resource allocation and improve program efficiency'
             when program_quality_score < 40 then 'Enhance faculty quality and curriculum rigor'
             when overall_competitiveness_rank > count(*) over () * 0.75 then 'Focus on core competency development'
             else 'Maintain competitive advantage and explore growth'
@@ -231,7 +230,7 @@ strategic_positioning as (
         -- Investment priority
         case
             when competitive_position = 'Market Leader' and program_classification = 'Flagship Program' then 'High Growth Investment'
-            when competitive_position = 'Strong Competitor' and financial_efficiency_score >= 70 then 'Expansion Investment'
+            when competitive_position = 'Strong Competitor' and resource_efficiency_score >= 70 then 'Expansion Investment'
             when competitive_position in ('Average Performer', 'Below Average') and program_classification != 'At-Risk Program' then 'Improvement Investment'
             when competitive_position = 'Needs Significant Improvement' or program_classification = 'At-Risk Program' then 'Restructuring Required'
             else 'Maintenance Investment'

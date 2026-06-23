@@ -235,46 +235,61 @@ models:
       - name: room
         description: Classroom or location identifier.
 
-  - name: stg_financial_aid
+  - name: stg_extracurricular_activities
     description: >
-      Staged student financial aid award records. Captures the type, amount
-      and status of each aid package. One row per award.
+      Staged student extracurricular activity records. Captures the activity name,
+      type, and participation hours per week. One row per activity participation.
     columns:
-      - name: aid_id
-        description: Unique surrogate identifier for a financial aid award.
+      - name: activity_id
+        description: Unique surrogate identifier for an extracurricular activity record.
       - name: student_id
-        description: Foreign key to the student receiving aid.
-      - name: quarter_id
-        description: Foreign key to the quarter the aid applies to.
-      - name: aid_type
-        description: "Aid category: grant, scholarship, loan, work-study, or fellowship."
-      - name: aid_source
-        description: "Funding origin: federal, state, institutional, or private."
-      - name: amount
-        description: Dollar amount of the award.
-      - name: status
-        description: "Award status: pending, approved, disbursed, or rejected."
-      - name: disbursed_at
-        description: Timestamp when funds were disbursed to the student account.
+        description: Foreign key to the student participating in the activity.
+      - name: activity_name
+        description: Name of the extracurricular activity.
+      - name: activity_type
+        description: Raw activity type from the source system.
+      - name: hours_per_week
+        description: Number of hours per week the student spends on the activity.
+      - name: academic_year
+        description: Academic year during which the student participated.
+      - name: start_date
+        description: Date the student started the activity.
+      - name: activity_category
+        description: "Derived category: Athletics, Arts, Academic, Community Service, or General Club."
+      - name: commitment_level
+        description: "Derived commitment level based on hours: High Commitment, Moderate Commitment, Low Commitment, or Minimal Commitment."
+      - name: start_year
+        description: Year extracted from start_date.
+      - name: created_at
+        description: Timestamp when the source record was created.
 
-  - name: stg_tuition_payments
+  - name: stg_attendance_records
     description: >
-      Staged student tuition payment transaction records. Each row is one
-      payment event against a student's tuition balance.
+      Staged student attendance records by quarter. Each row represents one
+      student's attendance summary for a given quarter, including excused and
+      unexcused absences and tardies.
     columns:
-      - name: payment_id
-        description: Unique surrogate identifier for a payment transaction.
+      - name: attendance_id
+        description: Unique surrogate identifier for an attendance record.
       - name: student_id
-        description: Foreign key to the student making the payment.
+        description: Foreign key to the student.
       - name: quarter_id
-        description: Foreign key to the quarter the payment covers.
-      - name: payment_date
-        description: Date the payment was processed.
-      - name: amount
-        description: Dollar amount of the payment.
-      - name: payment_method
-        description: "Payment method: credit card, bank transfer, check, or financial aid disbursement."
-      - name: transaction_id
-        description: External payment processor transaction reference.
-      - name: status
-        description: "Payment status: completed, pending, or failed."
+        description: Foreign key to the quarter the attendance covers.
+      - name: attendance_percentage
+        description: Percentage of scheduled sessions the student attended (0–100).
+      - name: excused_absences
+        description: Number of excused absences during the quarter.
+      - name: unexcused_absences
+        description: Number of unexcused absences during the quarter.
+      - name: tardies
+        description: Number of tardies recorded during the quarter.
+      - name: total_absences
+        description: Sum of excused and unexcused absences.
+      - name: attendance_status
+        description: "Derived status based on attendance_percentage: Excellent (>=95), Good (>=90), Fair (>=80), Poor (>=70), or Critical (<70)."
+      - name: unexcused_category
+        description: "Derived unexcused absence category: No Unexcused Absences, Minimal Unexcused, Moderate Unexcused, or Chronic Unexcused."
+      - name: tardy_category
+        description: "Derived tardy category: No Tardies, Minimal Tardies, Moderate Tardies, or Chronic Tardies."
+      - name: created_at
+        description: Timestamp when the source record was created.
