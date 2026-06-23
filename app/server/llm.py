@@ -125,6 +125,11 @@ class ChatMessage:
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, '')
             case 'on_tool_end':
                 tool_name = event.get('name', '')
+                if tool_name == 'Falkor_Knowledge_Graph_Retriever':
+                    raw = event['data'].get('output', '')
+                    output = raw.content if hasattr(raw, 'content') else str(raw)
+                    content = f'\n```\n{output}\n```\n' if output else '\n*No results*\n'
+                    return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI, content)
                 if tool_name in ('DBT_Semantic_Search', 'DBT_Fulltext_Search'):
                     raw = event['data'].get('output', '')
                     output = raw.content if hasattr(raw, 'content') else str(raw)

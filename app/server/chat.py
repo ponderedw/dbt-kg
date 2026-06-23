@@ -9,9 +9,8 @@ from app.models import ChatModel
 from app.server.llm import LLMAgent
 
 from langchain_neo4j import GraphCypherQAChain, Neo4jGraph
-from langchain.chains import FalkorDBQAChain
-from langchain_community.graphs import FalkorDBGraph
-from langchain_core.tools import create_retriever_tool
+from langchain_core.tools import create_retriever_tool, StructuredTool
+from falkordb import FalkorDB as FalkorDBClient
 
 from app.rag.vector_index import FalkorDBNodeRetriever, FalkorDBFulltextRetriever
 
@@ -51,20 +50,33 @@ async def chat(
     tools = []
 
     if graph_db == 'falkordb':
-        graph = FalkorDBGraph(
-            host='falkordb', port=6379, database="dbt_graph",
-            username=graph_user, password=graph_password,
-        )
-        chain = FalkorDBQAChain.from_llm(
-            ChatModel(), graph=graph, verbose=True,
-            allow_dangerous_requests=True, top_k=100,
-        )
-        tools.append(chain.as_tool(
+        _falkor_kwargs = {'host': 'falkordb', 'port': 6379}
+        if graph_user:
+            _falkor_kwargs['username'] = graph_user
+        if graph_password:
+            _falkor_kwargs['password'] = graph_password
+
+        def _run_cypher(query: str) -> str:
+            try:
+                db = FalkorDBClient(**_falkor_kwargs)
+                g = db.select_graph("dbt_graph")
+                result = g.query(query)
+                if not result.result_set:
+                    return "No results found."
+                header = [col[1] if isinstance(col, (list, tuple)) else col
+                          for col in result.header]
+                rows = [dict(zip(header, row)) for row in result.result_set]
+                return str(rows)
+            except Exception as e:
+                return f"Query error: {e}"
+
+        tools.append(StructuredTool.from_function(
+            func=_run_cypher,
             name="Falkor_Knowledge_Graph_Retriever",
             description=(
-                "Query the dbt knowledge graph using Cypher to retrieve model "
-                "lineage, dependencies, tests and metadata. Use for structural "
-                "questions: what depends on X, what does Y test, etc."
+                "Execute a Cypher query directly against the dbt knowledge graph "
+                "in FalkorDB and return raw results. Use for structural questions: "
+                "lineage, dependencies, tests, metadata. Pass a valid Cypher string."
             ),
         ))
 
