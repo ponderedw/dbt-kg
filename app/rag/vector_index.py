@@ -74,6 +74,27 @@ def _node_text(node_data: dict, catalog_nodes: dict) -> str:
     return "\n".join(lines)
 
 
+def _get_changed_node_ids(old_manifest: dict, new_manifest: dict) -> set:
+    """Return unique_ids of nodes that are new or whose embeddable text changed."""
+    def _collect(manifest: dict) -> dict:
+        nodes = {}
+        for node_id, node_data in manifest.get("nodes", {}).items():
+            if node_data.get("resource_type", "") in EMBEDDABLE_TYPES:
+                nodes[node_id] = node_data
+        for source_id, source_data in manifest.get("sources", {}).items():
+            nodes[source_id] = source_data
+        return nodes
+
+    old_nodes = _collect(old_manifest)
+    new_nodes = _collect(new_manifest)
+
+    changed = set()
+    for uid, node_data in new_nodes.items():
+        if uid not in old_nodes or _node_text(node_data, {}) != _node_text(old_nodes[uid], {}):
+            changed.add(uid)
+    return changed
+
+
 def build_node_embeddings(
     manifest_data: dict,
     catalog_data: dict,
@@ -81,12 +102,15 @@ def build_node_embeddings(
     port: int = 6379,
     username: Optional[str] = None,
     password: Optional[str] = None,
+    node_ids: Optional[set] = None,
 ) -> None:
     """Compute embeddings and store them as an `embedding` property on existing
     Model / Source / Seed / Snapshot nodes in dbt_graph.
 
     Also creates a vector index on each label so KNN queries are efficient.
     Safe to call repeatedly – index creation is idempotent.
+
+    node_ids: if provided, only re-embed those specific unique_ids (incremental mode).
     """
     db = FalkorDB(host=host, port=port, username=username, password=password)
     graph = db.select_graph(GRAPH_NAME)
@@ -100,6 +124,10 @@ def build_node_embeddings(
             to_embed[node_id] = (node_data, EMBEDDABLE_TYPES[rt])
     for source_id, source_data in manifest_data.get("sources", {}).items():
         to_embed[source_id] = (source_data, "Source")
+
+    if node_ids is not None:
+        to_embed = {uid: v for uid, v in to_embed.items() if uid in node_ids}
+        logger.info("Incremental mode: %d/%d nodes to re-embed", len(to_embed), len(node_ids))
 
     if not to_embed:
         logger.warning("No embeddable nodes found in manifest")

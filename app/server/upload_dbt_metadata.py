@@ -2,11 +2,11 @@ import json
 import os
 
 from fastapi import APIRouter, Request, File, UploadFile
-from typing import Annotated
+from typing import Annotated, Optional
 
 from dbt_graph_loader.loaders.falkordb_loader import DBTFalkorDBLoader
 from dbt_graph_loader.loaders.neo4j_loader import DBTNeo4jLoader
-from app.rag.vector_index import build_node_embeddings, build_fulltext_index
+from app.rag.vector_index import build_node_embeddings, build_fulltext_index, _get_changed_node_ids
 
 embeddings_router = APIRouter()
 
@@ -54,3 +54,39 @@ async def upload_dbt_metadata(catalog_file: Annotated[UploadFile, File()],
         raise Exception('GRAPH_DB value is incorrect')
 
     return {'results': 'ok'}
+
+
+@embeddings_router.post("/rebuild_embeddings/")
+async def rebuild_embeddings(
+    manifest_file: Annotated[UploadFile, File()],
+    old_manifest_file: Annotated[Optional[UploadFile], File()] = None,
+):
+    """Rebuild vector + fulltext indexes from a manifest.
+
+    If old_manifest_file is provided, only re-embeds nodes whose text changed
+    (incremental mode). Otherwise re-embeds all nodes.
+    """
+    graph_user = os.environ.get('GRAPH_USER')
+    graph_password = os.environ.get('GRAPH_PASSWORD')
+
+    manifest_data = json.loads((await manifest_file.read()).decode())
+
+    node_ids = None
+    if old_manifest_file is not None:
+        old_manifest_data = json.loads((await old_manifest_file.read()).decode())
+        node_ids = _get_changed_node_ids(old_manifest_data, manifest_data)
+
+    build_node_embeddings(
+        manifest_data=manifest_data,
+        catalog_data={},
+        username=graph_user,
+        password=graph_password,
+        node_ids=node_ids,
+    )
+    build_fulltext_index(
+        username=graph_user,
+        password=graph_password,
+    )
+
+    mode = f"incremental ({len(node_ids)} nodes)" if node_ids is not None else "full"
+    return {'results': 'ok', 'mode': mode}
