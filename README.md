@@ -21,10 +21,12 @@ For semantic search on AWS Bedrock, results are automatically reranked with **Co
 - **Graph Database Integration** — works with FalkorDB (default) and Neo4j
 - **AI-Powered Chat** — natural language querying via LangGraph ReAct agent with persistent conversation memory
 - **GraphRAG** — embeddings stored directly on graph nodes; one embedding per node combining name, description, schema, and all column descriptions
+- **Split Embeddings** (`SPLIT_EMBEDDINGS=true`) — large node text is chunked (6 000 chars, 200 overlap) and stored in a separate `dbt_graph_chunks` FalkorDB graph; KNN search queries the chunk graph and deduplicates to parent node `unique_id` before Cypher lookup in the main graph; required when using Bedrock Titan (8 192 token limit)
 - **Full-Text Search** — FalkorDB full-text index over name, description, schema, alias, materialization, and resource type
-- **Semantic Vector Search + Reranking** — KNN vector search across all node types, with optional Cohere Rerank v3.5 reranking (Bedrock only)
+- **Semantic Vector Search + Reranking** — KNN vector search across all node types (top 35 unique parents), with optional Cohere Rerank v3.5 reranking (Bedrock only)
 - **Transparent Search UI** — Streamlit surfaces all search steps: query, full candidate pool by similarity, and top-k reranked results
 - **Multi-provider LLM support** — AWS Bedrock, Anthropic, OpenAI
+- **Incremental Embedding Rebuild** — `POST /embeddings/rebuild_embeddings/` re-embeds only nodes whose text changed (compare old vs new manifest); callable from CI after each dbt run
 
 ## Quick Start
 
@@ -109,6 +111,7 @@ MATCH (a)-[b]-(c) RETURN a, b, c
 | `AWS_DEFAULT_REGION` | AWS region | If using Bedrock | `us-east-1` |
 | `BEDROCK_RERANKER_MODEL_ID` | Cohere reranker model ID | No | `cohere.rerank-v3-5:0` |
 | `BEDROCK_RERANKER_MODEL_ARN` | Full ARN override for reranker | No | built from model ID + region |
+| `SPLIT_EMBEDDINGS` | Split large node text into chunks stored in `dbt_graph_chunks` FalkorDB graph (recommended for Bedrock Titan) | No | `false` |
 | `GRAPH_DB` | Graph database type (`falkordb` or `neo4j`) | Yes | `falkordb` |
 | `GRAPH_USER` | Graph database username | If auth required | — |
 | `GRAPH_PASSWORD` | Graph database password | If auth required | — |
@@ -139,18 +142,56 @@ Embeddings are provider-matched automatically:
 Upload manifest.json + catalog.json
         │
         ▼
-  dbt_graph_loader ──► FalkorDB graph (Model, Source, Seed, Snapshot nodes + relationships)
+  dbt_graph_loader ──► dbt_graph (Model, Source, Seed, Snapshot nodes + relationships)
         │
         ▼
-  build_node_embeddings() ──► embedding attribute on each node (Titan / OpenAI)
-  build_fulltext_index()  ──► full-text index on 6 properties per label
+  build_node_embeddings()
+  ├── SPLIT_EMBEDDINGS=false (default)
+  │     └── embedding attribute stored directly on each node in dbt_graph
+  └── SPLIT_EMBEDDINGS=true
+        └── node text split into 6 000-char chunks (200 overlap)
+              └── Chunk nodes stored in dbt_graph_chunks
+                    (unique_id, parent_id, embedding, text, name, description,
+                     resource_type, schema, materialized, parent_label)
+  build_fulltext_index() ──► full-text index on 6 properties per label in dbt_graph
         │
         ▼
   LangGraph ReAct agent
-  ├── Falkor_Knowledge_Graph_Retriever  (Cypher via FalkorDBQAChain)
-  ├── DBT_Fulltext_Search               (FalkorDBFulltextRetriever)
-  └── DBT_Semantic_Search               (FalkorDBNodeRetriever + Cohere reranking)
-        │
+  ├── Falkor_Knowledge_Graph_Retriever  (Cypher against dbt_graph)
+  ├── DBT_Fulltext_Search               (FalkorDBFulltextRetriever, k=20)
+  └── DBT_Semantic_Search               (FalkorDBNodeRetriever, k=35)
+        │   ├── queries dbt_graph_chunks (SPLIT_EMBEDDINGS=true)
+        │   │     deduplicates by parent_id → returns unique_id for Cypher join
+        │   └── or queries dbt_graph directly (SPLIT_EMBEDDINGS=false)
+        │   └── optional Cohere Rerank v3.5 (Bedrock only)
         ▼
   Streamlit chat UI (streaming, shows search steps + rerank comparison)
 ```
+
+## API Endpoints
+
+### `POST /embeddings/rebuild_embeddings/`
+
+Rebuilds vector and full-text indexes from a manifest without re-uploading the full graph. Callable from CI after each dbt run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `manifest_file` | multipart file | Yes | Current `manifest.json` |
+| `old_manifest_file` | multipart file | No | Previous `manifest.json` — enables incremental mode (only re-embeds nodes whose text changed) |
+
+**Full rebuild:**
+```bash
+curl -X POST "$FAST_API_URL/embeddings/rebuild_embeddings/" \
+  -F "manifest_file=@manifest.json"
+```
+
+**Incremental rebuild (CI):**
+```bash
+# Download previous manifest from S3, upload both
+aws s3 cp s3://my-bucket/dbt-kg/main/manifest.json /tmp/old-manifest.json
+curl -X POST "$FAST_API_URL/embeddings/rebuild_embeddings/" \
+  -F "manifest_file=@/tmp/manifest.json" \
+  -F "old_manifest_file=@/tmp/old-manifest.json"
+```
+
+Response: `{"results": "ok", "mode": "incremental (12 nodes)"}` or `{"results": "ok", "mode": "full"}`

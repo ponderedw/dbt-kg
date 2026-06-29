@@ -1,10 +1,14 @@
 import uuid
 import os
+import logging
+import traceback
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.models import ChatModel
+
+logger = logging.getLogger(__name__)
 
 from app.server.llm import LLMAgent
 
@@ -135,9 +139,13 @@ async def chat(
         ))
 
     async def stream_agent_response():
-        async with LLMAgent(tools=tools) as llm_agent:
-            async for chat_msg in llm_agent.astream_events(
-                    chat_request.message, user_config):
-                yield chat_msg.content
+        try:
+            async with LLMAgent(tools=tools) as llm_agent:
+                async for chat_msg in llm_agent.astream_events(
+                        chat_request.message, user_config):
+                    yield chat_msg.content
+        except Exception as e:
+            logger.error("Stream error: %s\n%s", e, traceback.format_exc())
+            yield f"\n\n*Error: {e}*"
 
     return StreamingResponse(stream_agent_response(), media_type='application/json')

@@ -243,9 +243,10 @@ class ChatMessage:
                 | 'on_retriever_start' | 'on_retriever_end':
                 Logger().get_logger().debug('Ignoring message', event['event'])
                 return ''
-            # Unknown events.
+            # Unknown events — log and ignore so new LangGraph event types don't crash the stream.
             case _:
-                raise ValueError('Unknown event', event)
+                Logger().get_logger().warning('Unhandled LangGraph event: %s', event.get('event'))
+                return ''
 
     @classmethod
     def _handle_on_chat_model_stream(cls, event: dict) -> 'ChatMessage':
