@@ -295,6 +295,7 @@ class LLMAgent:
             .from_conn_string(
                 Database().get_connection_string())
         checkpointer = await self._checkpointer_ctx.__aenter__()
+        await checkpointer.setup()
 
         # Create the agent itself.
         self._agent = create_react_agent(
