@@ -21,6 +21,17 @@ EMBEDDABLE_TYPES = {
     "snapshot": "Snapshot",
 }
 
+_SPLIT_EMBEDDINGS = os.getenv("SPLIT_EMBEDDINGS", "false").lower() == "true"
+_CHUNK_SIZE = 6_000   # chars — safely under Titan's 8192 token limit
+_CHUNK_OVERLAP = 200  # chars of overlap between consecutive chunks
+CHUNK_GRAPH_NAME = "dbt_graph_chunks"
+
+
+def _split_text(text: str) -> list[str]:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    splitter = RecursiveCharacterTextSplitter(chunk_size=_CHUNK_SIZE, chunk_overlap=_CHUNK_OVERLAP)
+    return splitter.split_text(text)
+
 
 def _embedder() -> Embeddings:
     """Return the embedding model that matches the configured LLM provider."""
@@ -134,37 +145,89 @@ def build_node_embeddings(
         db.close()
         return
 
-    # Create vector indexes (one per label, idempotent)
-    for label in {label for _, label in to_embed.values()}:
+    embedder = _embedder()
+
+    if _SPLIT_EMBEDDINGS:
+        # ── Split mode: Chunk nodes stored in a separate graph ──
+        chunk_graph = db.select_graph(CHUNK_GRAPH_NAME)
         try:
-            graph.query(
-                f"CREATE VECTOR INDEX FOR (n:{label}) ON (n.embedding) "
+            chunk_graph.query(
+                f"CREATE VECTOR INDEX FOR (n:Chunk) ON (n.embedding) "
                 f"OPTIONS {{dimension: {EMBEDDING_DIM}, similarityFunction: 'cosine'}}"
             )
-            logger.info("Created vector index on %s.embedding", label)
+            logger.info("Created vector index on %s Chunk.embedding", CHUNK_GRAPH_NAME)
         except Exception as e:
-            logger.debug("Vector index on %s already exists or failed: %s", label, e)
+            logger.debug("Chunk vector index already exists or failed: %s", e)
 
-    # Batch-compute embeddings
-    ids = list(to_embed.keys())
-    texts = [_node_text(to_embed[uid][0], catalog_nodes) for uid in ids]
-    logger.info("Computing embeddings for %d nodes…", len(texts))
-    vectors = _embedder().embed_documents(texts)
+        updated = 0
+        for uid, (node_data, label) in to_embed.items():
+            text = _node_text(node_data, catalog_nodes)
+            chunks = _split_text(text)
 
-    # Store embedding on each existing node
-    updated = 0
-    for uid, vec in zip(ids, vectors):
-        _, label = to_embed[uid]
-        try:
-            graph.query(
-                f"MATCH (n:{label}) WHERE n.unique_id = $uid SET n.embedding = vecf32($vec)",
-                {"uid": uid, "vec": vec},
-            )
-            updated += 1
-        except Exception as e:
-            logger.error("Error storing embedding for %s: %s", uid, e)
+            try:
+                chunk_graph.query(
+                    "MATCH (c:Chunk {parent_id: $uid}) DETACH DELETE c",
+                    {"uid": uid},
+                )
+            except Exception as e:
+                logger.warning("Could not delete old chunks for %s: %s", uid, e)
 
-    logger.info("Stored embeddings on %d/%d nodes", updated, len(ids))
+            node_attrs = {
+                "name": node_data.get("name", ""),
+                "description": (node_data.get("description") or "").strip(),
+                "resource_type": node_data.get("resource_type", ""),
+                "schema": node_data.get("schema", ""),
+                "materialized": node_data.get("config", {}).get("materialized", ""),
+                "parent_label": label,
+            }
+            vectors = embedder.embed_documents(chunks)
+            for i, (chunk_text, vec) in enumerate(zip(chunks, vectors)):
+                chunk_id = f"{uid}__chunk_{i}"
+                try:
+                    chunk_graph.query(
+                        "CREATE (:Chunk {unique_id: $chunk_id, parent_id: $uid, "
+                        "text: $text, embedding: vecf32($vec), "
+                        "name: $name, description: $description, resource_type: $resource_type, "
+                        "schema: $schema, materialized: $materialized, parent_label: $parent_label})",
+                        {"chunk_id": chunk_id, "uid": uid, "text": chunk_text, "vec": vec,
+                         **node_attrs},
+                    )
+                    updated += 1
+                except Exception as e:
+                    logger.error("Error storing chunk %s: %s", chunk_id, e)
+
+        logger.info("Stored %d chunks across %d nodes in %s", updated, len(to_embed), CHUNK_GRAPH_NAME)
+
+    else:
+        # ── Default mode: single embedding stored on the node itself ──
+        for label in {label for _, label in to_embed.values()}:
+            try:
+                graph.query(
+                    f"CREATE VECTOR INDEX FOR (n:{label}) ON (n.embedding) "
+                    f"OPTIONS {{dimension: {EMBEDDING_DIM}, similarityFunction: 'cosine'}}"
+                )
+                logger.info("Created vector index on %s.embedding", label)
+            except Exception as e:
+                logger.debug("Vector index on %s already exists or failed: %s", label, e)
+
+        ids = list(to_embed.keys())
+        texts = [_node_text(to_embed[uid][0], catalog_nodes) for uid in ids]
+        logger.info("Computing embeddings for %d nodes…", len(texts))
+        vectors = embedder.embed_documents(texts)
+
+        updated = 0
+        for uid, vec in zip(ids, vectors):
+            _, label = to_embed[uid]
+            try:
+                graph.query(
+                    f"MATCH (n:{label}) WHERE n.unique_id = $uid SET n.embedding = vecf32($vec)",
+                    {"uid": uid, "vec": vec},
+                )
+                updated += 1
+            except Exception as e:
+                logger.error("Error storing embedding for %s: %s", uid, e)
+
+        logger.info("Stored embeddings on %d/%d nodes", updated, len(ids))
 
 
 _FULLTEXT_LABELS = ["Model", "Source", "Seed", "Snapshot"]
@@ -365,32 +428,69 @@ class FalkorDBNodeRetriever(BaseRetriever):
         docs: list[Document] = []
         seen: set[str] = set()
 
-        for label in self.labels:
+        if _SPLIT_EMBEDDINGS:
             try:
-                result = graph.query(
-                    f"CALL db.idx.vector.queryNodes('{label}', 'embedding', $k, vecf32($vec)) "
-                    f"YIELD node, score "
-                    f"RETURN node.name AS name, node.description AS description, "
-                    f"node.unique_id AS unique_id, node.resource_type AS resource_type, score",
-                    {"k": self.k, "vec": query_vec},
+                chunk_graph = db.select_graph(CHUNK_GRAPH_NAME)
+                # Fetch more chunks than k so deduplication still yields k unique parents
+                chunk_result = chunk_graph.query(
+                    "CALL db.idx.vector.queryNodes('Chunk', 'embedding', $k, vecf32($vec)) "
+                    "YIELD node AS chunk, score "
+                    "RETURN chunk.parent_id, chunk.name, chunk.description, "
+                    "chunk.resource_type, chunk.schema, chunk.materialized, chunk.text, score",
+                    {"k": self.k * 3, "vec": query_vec},
                 )
-                for row in result.result_set:
-                    uid = row[2]
-                    if uid in seen:
+                # Deduplicate by parent_id, keeping best-scoring chunk's data
+                parent_hits: dict[str, tuple] = {}
+                for row in chunk_result.result_set:
+                    parent_id, name, description, resource_type, schema, materialized, text, score = row
+                    if parent_id not in parent_hits or score > parent_hits[parent_id][7]:
+                        parent_hits[parent_id] = (parent_id, name, description, resource_type, schema, materialized, text, score)
+
+                for hit in list(parent_hits.values())[:self.k]:
+                    parent_id, name, description, resource_type, schema, materialized, text, score = hit
+                    if parent_id in seen:
                         continue
-                    seen.add(uid)
-                    name, description, _, resource_type, score = row
+                    seen.add(parent_id)
                     docs.append(Document(
-                        page_content=f"{resource_type}: {name}\n{description or ''}",
+                        page_content=text or f"{resource_type}: {name}\n{description or ''}",
                         metadata={
-                            "unique_id": uid,
+                            "unique_id": parent_id,
                             "name": name,
                             "resource_type": resource_type,
+                            "schema": schema,
+                            "materialized": materialized,
                             "score": score,
                         },
                     ))
             except Exception as e:
-                logger.debug("Vector KNN query skipped for label %s: %s", label, e)
+                logger.debug("Chunk vector KNN query failed: %s", e)
+        else:
+            for label in self.labels:
+                try:
+                    result = graph.query(
+                        f"CALL db.idx.vector.queryNodes('{label}', 'embedding', $k, vecf32($vec)) "
+                        f"YIELD node, score "
+                        f"RETURN node.name AS name, node.description AS description, "
+                        f"node.unique_id AS unique_id, node.resource_type AS resource_type, score",
+                        {"k": self.k, "vec": query_vec},
+                    )
+                    for row in result.result_set:
+                        uid = row[2]
+                        if uid in seen:
+                            continue
+                        seen.add(uid)
+                        name, description, _, resource_type, score = row
+                        docs.append(Document(
+                            page_content=f"{resource_type}: {name}\n{description or ''}",
+                            metadata={
+                                "unique_id": uid,
+                                "name": name,
+                                "resource_type": resource_type,
+                                "score": score,
+                            },
+                        ))
+                except Exception as e:
+                    logger.debug("Vector KNN query skipped for label %s: %s", label, e)
 
         docs.sort(key=lambda d: d.metadata.get("score", 0), reverse=True)
 

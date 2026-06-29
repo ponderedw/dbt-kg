@@ -38,15 +38,23 @@ A full-text index over model descriptions. Use it to:
 - Faster and more precise than semantic search when the user provides specific terms
 
 ## Semantic Search (DBT_Semantic_Search)
-A vector index over model descriptions and column descriptions. Use it to:
+A vector index over chunked model/source/seed/snapshot text. Use it to:
 - Find models or columns by business concept or meaning
 - Discover models related to a domain without knowing exact names
 - Answer "which models deal with X?" when X is a concept, not a keyword
 
+**IMPORTANT:** DBT_Semantic_Search returns `unique_id` values — these are the join key
+into the main knowledge graph. After getting `unique_id`s from semantic search, always
+follow up with the {graphdb_name} retriever to fetch full node details, lineage, tests,
+or any other attributes. Example:
+
+  1. DBT_Semantic_Search("financial aid disbursement") → unique_id: "model.psdw.fct_aid"
+  2. Cypher: MATCH (m:Model {{unique_id: 'model.psdw.fct_aid'}})-[:DEPENDS_ON]->(upstream) RETURN upstream.name
+
 ## Tool selection guide
 - Structural / lineage questions → {graphdb_name} retriever (Cypher)
 - Specific keywords or name fragments → DBT_Fulltext_Search
-- Business concepts or meaning → DBT_Semantic_Search
+- Business concepts or meaning → DBT_Semantic_Search, then Cypher with the returned unique_ids
 - Complex questions → combine tools"""
 
 
