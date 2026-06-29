@@ -141,8 +141,7 @@ def build_node_embeddings(
         logger.info("Incremental mode: %d/%d nodes to re-embed", len(to_embed), len(node_ids))
 
     if not to_embed:
-        logger.warning("No embeddable nodes found in manifest")
-        db.close()
+        logger.info("No nodes to embed (0 changed)")
         return
 
     embedder = _embedder()
