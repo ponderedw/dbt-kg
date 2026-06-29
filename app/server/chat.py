@@ -84,7 +84,7 @@ async def chat(
         fulltext_retriever = FalkorDBFulltextRetriever(
             host='falkordb', port=6379,
             username=graph_user, password=graph_password,
-            k=5,
+            k=20,
         )
         tools.append(create_retriever_tool(
             fulltext_retriever,
@@ -101,7 +101,7 @@ async def chat(
         retriever = FalkorDBNodeRetriever(
             host='falkordb', port=6379,
             username=graph_user, password=graph_password,
-            k=5,
+            k=35,
         )
         tools.append(create_retriever_tool(
             retriever,
