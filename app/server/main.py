@@ -27,7 +27,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.environ['SECRET_KEY'],
-    https_only=Config.get_deploy_env() == 'PROD',
+    https_only=False,
 )
 
 
